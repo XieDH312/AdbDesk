@@ -28,6 +28,34 @@ public sealed class AdbService
         return enriched;
     }
 
+    public async Task<DisconnectResult> DisconnectWirelessAsync(DeviceInfo device, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(device.Serial) || !device.IsNetworkConnection)
+            throw new InvalidOperationException("仅可断开指定的无线 ADB 连接。");
+
+        var current = await GetRawDevicesAsync(cancellationToken).ConfigureAwait(false);
+        if (!current.Any(candidate => candidate.Serial == device.Serial))
+            return new DisconnectResult(true, "该无线连接已不在设备列表中。");
+
+        // Never omit the serial: a bare 'adb disconnect' disconnects every TCP device.
+        // ADB also accepts an exact mDNS transport serial here, including offline transports.
+        var result = await RunAsync(["disconnect", device.Serial], CommandTimeout, cancellationToken).ConfigureAwait(false);
+        _detailsCache.Clear();
+        if (!result.Succeeded || !result.Output.Split('\n').Any(line => line.Trim() == $"disconnected {device.Serial}"))
+            return new DisconnectResult(false, $"断开失败：{result.ErrorOrOutput}");
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (attempt > 0) await Task.Delay(150, cancellationToken).ConfigureAwait(false);
+            current = await GetRawDevicesAsync(cancellationToken).ConfigureAwait(false);
+            if (!current.Any(candidate => candidate.Serial == device.Serial))
+                return new DisconnectResult(true, "已断开当前无线连接；手机无线调试开关和配对记录保持不变。");
+        }
+        return new DisconnectResult(false, "ADB 已处理断开请求，但设备仍在列表中，可能正在重新连接。请检查手机或其他连接工具。");
+    }
+
     public async Task<WirelessResult> SetWirelessAsync(
         DeviceInfo device,
         bool enabled,

@@ -12,6 +12,7 @@ if (Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL") == "1")
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("wireless disconnect targets one transport and verifies removal without affecting other devices", WirelessDisconnectAsync),
     ("device enumeration parses states and routes through explicit adb arguments", DeviceEnumerationAsync),
     ("device enumeration enriches names versions and authoritative transports", DeviceDetailsAsync),
     ("device detail probes are cached bounded and preserve partial devices", DeviceDetailCacheAsync),
@@ -49,6 +50,46 @@ foreach (var test in tests)
 
 Console.WriteLine($"RESULT {tests.Length - failures.Count}/{tests.Length} passed");
 Environment.ExitCode = failures.Count == 0 ? 0 : 1;
+
+static async Task WirelessDisconnectAsync()
+{
+    using var fixture = new ToolFixture();
+    const string target = "192.0.2.40:6666";
+    const string other = "192.0.2.41:5555";
+    const string tls = "adb-Test._adb-tls-connect._tcp";
+    fixture.SetDevices($"List of devices attached\n{target} device model:One\n{other} device model:Two\n{tls} offline\nphysical-usb device model:USB\n");
+    var service = new AdbService(fixture.Paths);
+    fixture.SetResponse(target, "disconnect", $"disconnected {target}");
+    var disconnected = await service.DisconnectWirelessAsync(new DeviceInfo(target, "One", "device"));
+    True(disconnected.Disconnected, "selected network transport removed");
+    True(fixture.HasInvocation("disconnect", target), "exact selected serial including custom port");
+    False(fixture.HasInvocation("disconnect"), "never disconnect all devices");
+    False(fixture.HasInvocation("disconnect", other), "other network transport untouched");
+    False(fixture.HasInvocation("kill-server"), "shared server remains running");
+
+    fixture.SetResponse(tls, "disconnect", $"disconnected {tls}");
+    True((await service.DisconnectWirelessAsync(new DeviceInfo(tls, "TLS", "offline"))).Disconnected,
+        "offline mDNS transport can be disconnected by exact serial without shell probes");
+    await ThrowsAsync<InvalidOperationException>(() => service.DisconnectWirelessAsync(
+        new DeviceInfo("physical-usb", "USB", "device") { Transport = DeviceTransport.Network }));
+    False(fixture.HasInvocation("disconnect", "physical-usb"), "USB blocked even with incorrect transport metadata");
+    var calls = fixture.CountCommand("disconnect");
+    True((await service.DisconnectWirelessAsync(new DeviceInfo(target, "One", "device"))).Disconnected, "already absent is harmless");
+    Equal(calls, fixture.CountCommand("disconnect"), "no disconnect for absent target");
+
+    fixture.SetResponse(other, "disconnect", "unexpected response");
+    False((await service.DisconnectWirelessAsync(new DeviceInfo(other, "Two", "device"))).Disconnected,
+        "exit zero without success is not disconnection");
+    fixture.SetResponse(other, "disconnect", $"disconnected {other}");
+    fixture.SetResponse(other, "keep-after-disconnect", "1");
+    False((await service.DisconnectWirelessAsync(new DeviceInfo(other, "Two", "device"))).Disconnected,
+        "still-present or immediately reconnected target is not reported removed");
+    using var canceled = new CancellationTokenSource();
+    canceled.Cancel();
+    calls = fixture.CountCommand("disconnect");
+    await ThrowsAsync<OperationCanceledException>(() => service.DisconnectWirelessAsync(new DeviceInfo(other, "Two", "device"), canceled.Token));
+    Equal(calls, fixture.CountCommand("disconnect"), "pre-cancel does not submit disconnection");
+}
 
 static async Task DeviceEnumerationAsync()
 {
@@ -777,7 +818,20 @@ static class FakeTool
         if (arguments.SequenceEqual(["devices", "-l"]))
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "adb-invocation.txt"), string.Join('|', arguments));
-            Console.Write(Environment.GetEnvironmentVariable("ADBDESK_TEST_DEVICES"));
+            var removedPath = Path.Combine(directory, "disconnected.txt");
+            var removed = File.Exists(removedPath) ? await File.ReadAllLinesAsync(removedPath) : [];
+            var rows = (Environment.GetEnvironmentVariable("ADBDESK_TEST_DEVICES") ?? "").Split('\n');
+            Console.Write(string.Join('\n', rows.Where(row => !removed.Contains(row.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()))));
+            return;
+        }
+        if (arguments is ["disconnect", var disconnectSerial])
+        {
+            await RespondAsync(directory, disconnectSerial, "disconnect");
+            var responsePath = ResponsePath(directory, disconnectSerial, "disconnect");
+            if (Environment.ExitCode == 0 && File.Exists(responsePath) &&
+                (await File.ReadAllTextAsync(responsePath)).Trim() == $"disconnected {disconnectSerial}" &&
+                !File.Exists(ResponsePath(directory, disconnectSerial, "keep-after-disconnect")))
+                await File.AppendAllTextAsync(Path.Combine(directory, "disconnected.txt"), disconnectSerial + "\n");
             return;
         }
         if (arguments.SequenceEqual(["emit"]))

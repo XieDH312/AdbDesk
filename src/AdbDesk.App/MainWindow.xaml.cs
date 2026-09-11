@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private PairingService? _pairingService;
     private PairingWindow? _pairingWindow;
     private int _refreshing;
+    private int _deviceRevision;
     private bool _servicesReady;
     private bool _isClosing;
 
@@ -85,16 +86,18 @@ public partial class MainWindow : Window
             return;
         }
 
+        var revision = _deviceRevision;
         try
         {
             var discovered = await _adbService.GetDevicesAsync(_lifetime.Token);
+            if (_isClosing || revision != _deviceRevision) return;
             var serials = discovered.Select(device => device.Serial).ToHashSet(StringComparer.Ordinal);
 
             for (var i = Devices.Count - 1; i >= 0; i--)
             {
                 if (!serials.Contains(Devices[i].Serial))
                 {
-                    if (_mirrorService?.IsRunning(Devices[i].Serial) == true || Devices[i].IsWirelessBusy)
+                    if (_mirrorService?.IsRunning(Devices[i].Serial) == true || Devices[i].IsConnectionBusy)
                     {
                         Devices[i].Update(Devices[i].Device with { State = "stale" });
                         Devices[i].IsSelected = false;
@@ -138,6 +141,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            if (_isClosing || revision != _deviceRevision) return;
             foreach (var row in Devices)
             {
                 row.Update(row.Device with { State = "stale" });
@@ -176,9 +180,7 @@ public partial class MainWindow : Window
 
     private async void RetryButton_Click(object sender, RoutedEventArgs e) => await InitializeServicesAsync();
 
-    private void QrPairingButton_Click(object sender, RoutedEventArgs e) => OpenPairingWindow(PairingTab.Qr);
-
-    private void CodePairingButton_Click(object sender, RoutedEventArgs e) => OpenPairingWindow(PairingTab.Code);
+    private void WirelessConnectionButton_Click(object sender, RoutedEventArgs e) => OpenPairingWindow(PairingTab.Qr);
 
     private void OpenPairingWindow(PairingTab initialTab)
     {
@@ -195,7 +197,6 @@ public partial class MainWindow : Window
 
         if (_pairingWindow is { IsLoaded: true })
         {
-            _pairingWindow.SelectTab(initialTab);
             if (_pairingWindow.WindowState == WindowState.Minimized) _pairingWindow.WindowState = WindowState.Normal;
             _pairingWindow.Activate();
             return;
@@ -279,6 +280,56 @@ public partial class MainWindow : Window
         {
             StartMirror(row);
         }
+    }
+
+    private async void DisconnectButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isClosing || _adbService is not { } service ||
+            (sender as FrameworkElement)?.DataContext is not DeviceRow row || !row.CanDisconnectAction) return;
+        if (InstallTasks.Any(task => task.Serial == row.Serial && ActiveInstallStates.Contains(task.Status)))
+        {
+            SetStatus("这台设备有安装任务，请等待完成或取消安装后再断开连接", StatusKind.Warning);
+            return;
+        }
+
+        row.IsDisconnecting = true;
+        row.IsSelected = false;
+        row.SetWirelessStatus(string.Empty);
+        _deviceRevision++;
+        try
+        {
+            var result = await service.DisconnectWirelessAsync(row.Device, _lifetime.Token);
+            if (_isClosing) return;
+            row.SetWirelessStatus(result.Message);
+            AppendMirrorLog(row.Serial, result.Message);
+            if (result.Disconnected)
+            {
+                _mirrorService?.Stop(row.Serial);
+                row.IsMirroring = false;
+                row.Update(row.Device with { State = "offline" });
+                row.PropertyChanged -= DeviceRow_PropertyChanged;
+                Devices.Remove(row);
+                UpdateDeviceSummary();
+            }
+            SetStatus(result.Message, result.Disconnected ? StatusKind.Ready : StatusKind.Warning);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            if (!_isClosing)
+            {
+                var message = $"无法确认断开结果：{exception.Message}";
+                row.SetWirelessStatus(message);
+                AppendMirrorLog(row.Serial, message);
+                SetStatus(message, StatusKind.Error);
+            }
+        }
+        finally
+        {
+            row.IsDisconnecting = false;
+            _deviceRevision++;
+        }
+        if (!_isClosing) await RefreshDevicesAsync();
     }
 
     private async void WirelessButton_Click(object sender, RoutedEventArgs e)
@@ -404,9 +455,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (row.IsWirelessBusy)
+        if (row.IsConnectionBusy)
         {
-            SetStatus("该设备正在切换无线连接，请等待操作完成后再启动投屏", StatusKind.Warning);
+            SetStatus("该设备正在处理连接操作，请等待完成后再启动投屏", StatusKind.Warning);
             return;
         }
 
@@ -528,7 +579,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (Devices.Any(device => device.IsWirelessBusy))
+        if (Devices.Any(device => device.IsWirelessBusy) || targets.Any(device => device.IsDisconnecting))
         {
             SetStatus("设备正在切换无线连接，暂时不能提交新的安装任务", StatusKind.Warning);
             return;
@@ -542,7 +593,7 @@ public partial class MainWindow : Window
 
     private void EnqueueInstall(DeviceRow target, string apkPath)
     {
-        if (_isClosing || Devices.Any(device => device.IsWirelessBusy))
+        if (_isClosing || target.IsDisconnecting || Devices.Any(device => device.IsWirelessBusy))
         {
             SetStatus("设备正在切换无线连接，暂时不能提交新的安装任务", StatusKind.Warning);
             return;

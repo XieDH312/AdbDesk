@@ -11,6 +11,7 @@ public sealed class DeviceRow : INotifyPropertyChanged
     private bool _isSelected;
     private bool _isMirroring;
     private bool _isWirelessBusy;
+    private bool _isDisconnecting;
     private string _wirelessStatusMessage = string.Empty;
 
     public DeviceRow(DeviceInfo device)
@@ -47,9 +48,13 @@ public sealed class DeviceRow : INotifyPropertyChanged
         : $"设备详情读取失败：{_device.DetailsError}";
     public string State => _device.State;
     public bool IsReady => _device.IsReady;
-    public bool CanMirrorAction => IsReady || IsMirroring;
+    public bool IsConnectionBusy => IsWirelessBusy || IsDisconnecting;
+    public bool CanMirrorAction => (IsReady && !IsConnectionBusy) || IsMirroring;
     public bool ShowWirelessActions => IsReady && _device.Transport == DeviceTransport.Usb;
-    public bool CanWirelessAction => ShowWirelessActions && !IsWirelessBusy;
+    public bool CanWirelessAction => ShowWirelessActions && !IsConnectionBusy;
+    public bool ShowDisconnectAction => _device.IsNetworkConnection;
+    public bool CanDisconnectAction => ShowDisconnectAction && !IsConnectionBusy;
+    public string DisconnectActionText => IsDisconnecting ? "正在断开…" : "断开连接";
     public string StateText => _device.State switch
     {
         "device" => "已连接",
@@ -102,11 +107,30 @@ public sealed class DeviceRow : INotifyPropertyChanged
                 OnPropertyChanged(nameof(CanWirelessAction));
                 OnPropertyChanged(nameof(WirelessBusyText));
                 OnPropertyChanged(nameof(HasWirelessStatus));
+                OnPropertyChanged(nameof(IsConnectionBusy));
+                OnPropertyChanged(nameof(CanDisconnectAction));
+                OnPropertyChanged(nameof(CanMirrorAction));
             }
         }
     }
 
-    public string WirelessBusyText => IsWirelessBusy ? "正在切换连接方式…" : WirelessStatusMessage;
+    public bool IsDisconnecting
+    {
+        get => _isDisconnecting;
+        set
+        {
+            if (!SetField(ref _isDisconnecting, value)) return;
+            OnPropertyChanged(nameof(IsConnectionBusy));
+            OnPropertyChanged(nameof(CanDisconnectAction));
+            OnPropertyChanged(nameof(DisconnectActionText));
+            OnPropertyChanged(nameof(CanMirrorAction));
+            OnPropertyChanged(nameof(CanWirelessAction));
+            OnPropertyChanged(nameof(WirelessBusyText));
+            OnPropertyChanged(nameof(HasWirelessStatus));
+        }
+    }
+
+    public string WirelessBusyText => IsDisconnecting ? "正在断开当前无线连接…" : IsWirelessBusy ? "正在切换连接方式…" : WirelessStatusMessage;
 
     public string WirelessStatusMessage
     {
@@ -142,6 +166,8 @@ public sealed class DeviceRow : INotifyPropertyChanged
         OnPropertyChanged(nameof(CanMirrorAction));
         OnPropertyChanged(nameof(ShowWirelessActions));
         OnPropertyChanged(nameof(CanWirelessAction));
+        OnPropertyChanged(nameof(ShowDisconnectAction));
+        OnPropertyChanged(nameof(CanDisconnectAction));
         OnPropertyChanged(nameof(StateText));
         OnPropertyChanged(nameof(StateForeground));
         OnPropertyChanged(nameof(StateBackground));

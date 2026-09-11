@@ -53,8 +53,7 @@
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Content="扫码连接" Click="QrPairingButton_Click" Margin="0,0,8,0" />
-                    <Button Content="配对码连接" Click="CodePairingButton_Click" Margin="0,0,8,0" />
+                    <Button Content="无线连接" Click="WirelessConnectionButton_Click" Margin="0,0,8,0" />
                     <Button x:Name="RetryButton" Content="重新检测工具" Click="RetryButton_Click" Visibility="Collapsed" Margin="0,0,8,0" />
                     <Button Content="使用帮助" Click="HelpButton_Click" />
                 </StackPanel>
@@ -148,6 +147,7 @@
                                                     <TextBlock Text="{Binding SerialAndTransport}" Style="{StaticResource CaptionStyle}" Margin="0,3,0,0"
                                                                TextTrimming="CharacterEllipsis" />
                                                     <TextBlock Text="{Binding WirelessBusyText}" Foreground="{StaticResource AccentBrush}" FontSize="11"
+                                                               ToolTip="{Binding WirelessBusyText}"
                                                                Margin="0,4,12,0" TextTrimming="CharacterEllipsis"
                                                                Visibility="{Binding HasWirelessStatus, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                                 </StackPanel>
@@ -162,6 +162,10 @@
                                                         </Border>
                                                         <Button Content="{Binding MirrorActionText}" IsEnabled="{Binding CanMirrorAction}"
                                                                 Style="{StaticResource CompactButtonStyle}" Click="MirrorButton_Click" />
+                                                        <Button Content="{Binding DisconnectActionText}" IsEnabled="{Binding CanDisconnectAction}"
+                                                                Visibility="{Binding ShowDisconnectAction, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                                Style="{StaticResource CompactButtonStyle}" Click="DisconnectButton_Click" Margin="8,0,0,0"
+                                                                ToolTip="断开这台设备的当前无线 ADB 连接，不关闭手机无线调试或删除配对记录" />
                                                     </StackPanel>
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0"
                                                                 Visibility="{Binding ShowWirelessActions, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -208,7 +212,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="安装任务" Style="{StaticResource SectionTitleStyle}" />
-                                <TextBlock Text="双击任务查看或复制完整详情" Style="{StaticResource CaptionStyle}" Margin="0,3,0,0" />
+                                <TextBlock Text="主界面发起的安装 · 双击查看详情" Style="{StaticResource CaptionStyle}" Margin="0,3,0,0" />
                             </StackPanel>
                             <TextBlock x:Name="InstallCountText" Grid.Column="1" Text="暂无任务" Style="{StaticResource CaptionStyle}" VerticalAlignment="Center" />
                         </Grid>
@@ -252,7 +256,8 @@
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
-                            <TextBlock x:Name="EmptyInstallText" Text="拖入或选择一个 APK 开始安装" Style="{StaticResource CaptionStyle}"
+                            <TextBlock x:Name="EmptyInstallText" Text="选择 APK 或拖入设备行，安装记录显示在这里。&#10;直接拖入投屏窗口的安装，请查看右侧日志。" Style="{StaticResource CaptionStyle}"
+                                       TextWrapping="Wrap" TextAlignment="Center" Margin="16"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                     </Grid>
