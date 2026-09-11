@@ -434,6 +434,20 @@ public partial class MainWindow : Window
         }
     }
 
+    private void InstallRow_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2 || (sender as FrameworkElement)?.DataContext is not InstallRow row)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        new InstallDetailWindow(row)
+        {
+            Owner = this
+        }.ShowDialog();
+    }
+
     private void TrimInstallHistory()
     {
         while (InstallTasks.Count > 200)

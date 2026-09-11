@@ -185,7 +185,10 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="安装任务" Style="{StaticResource SectionTitleStyle}" />
+                            <StackPanel>
+                                <TextBlock Text="安装任务" Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="双击任务查看或复制完整详情" Style="{StaticResource CaptionStyle}" Margin="0,3,0,0" />
+                            </StackPanel>
                             <TextBlock x:Name="InstallCountText" Grid.Column="1" Text="暂无任务" Style="{StaticResource CaptionStyle}" VerticalAlignment="Center" />
                         </Grid>
                         <Grid Grid.Row="1">
@@ -202,7 +205,13 @@
                                 </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="16,5,12,8">
+                                        <Grid Margin="16,5,12,8" Cursor="Hand" ToolTipService.ShowDuration="30000"
+                                              MouseLeftButtonDown="InstallRow_MouseLeftButtonDown">
+                                            <Grid.ToolTip>
+                                                <ToolTip MaxWidth="640">
+                                                    <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" />
+                                                </ToolTip>
+                                            </Grid.ToolTip>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="100" />

@@ -1,0 +1,76 @@
+<Window x:Class="AdbDesk.App.InstallDetailWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="安装任务详情"
+        Width="680" Height="520" MinWidth="520" MinHeight="360"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="26">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="18" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="安装任务详情" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="完整信息可选中并复制，用于排查安装失败。"
+                       Foreground="{StaticResource MutedBrush}" Margin="0,5,0,0" />
+        </StackPanel>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="82" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="APK 路径" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Text="{Binding ApkPath, Mode=OneWay}" IsReadOnly="True" Padding="9,6"
+                     HorizontalScrollBarVisibility="Auto"
+                     BorderBrush="{StaticResource LineBrush}" Background="#F8FAFC" />
+        </Grid>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="82" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="设备标识" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Text="{Binding Serial, Mode=OneWay}" IsReadOnly="True" Padding="9,6"
+                     BorderBrush="{StaticResource LineBrush}" Background="#F8FAFC" />
+        </Grid>
+
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="82" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="任务状态" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Text="{Binding Status, Mode=OneWay}" IsReadOnly="True" Padding="9,6"
+                     BorderBrush="{StaticResource LineBrush}" Background="#F8FAFC" />
+        </Grid>
+
+        <Grid Grid.Row="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="8" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="完整输出" Foreground="{StaticResource MutedBrush}" />
+            <TextBox Grid.Row="2" Text="{Binding Detail, Mode=OneWay}" IsReadOnly="True"
+                     AcceptsReturn="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                     Padding="12,10" BorderBrush="{StaticResource LineBrush}" Background="#F8FAFC"
+                     FontFamily="Cascadia Mono, Consolas" FontSize="12" />
+        </Grid>
+
+        <Button Grid.Row="10" Content="关闭" Width="92" HorizontalAlignment="Right"
+                IsDefault="True" IsCancel="True" Click="CloseButton_Click" />
+    </Grid>
+</Window>
