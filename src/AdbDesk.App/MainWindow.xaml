@@ -53,6 +53,8 @@
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="扫码连接" Click="QrPairingButton_Click" Margin="0,0,8,0" />
+                    <Button Content="配对码连接" Click="CodePairingButton_Click" Margin="0,0,8,0" />
                     <Button x:Name="RetryButton" Content="重新检测工具" Click="RetryButton_Click" Visibility="Collapsed" Margin="0,0,8,0" />
                     <Button Content="使用帮助" Click="HelpButton_Click" />
                 </StackPanel>

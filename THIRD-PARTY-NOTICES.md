@@ -17,3 +17,8 @@ Upstream source and license information:
 
 Tool archive SHA256: 5b12172b3264b2889f4583ee64752ce832e29bc8b1089dca81093459697165db.
 This project does not incorporate binaries or source from the aztpfree reference application.
+
+The wireless pairing dialog renders QR codes locally using QRCoder 1.8.0 (MIT):
+https://github.com/Shane32/QRCoder/tree/v1.8.0
+The full license is retained at licenses/QRCoder-LICENSE.txt and included in the portable application.
+ZXing.Net 0.16.11 is used only by the QR image regression tests and is not distributed with the application.

@@ -12,6 +12,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
     & $taskDotnet run --project 'tests/AdbDesk.Core.Tests' -c Release --no-build
     if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed.' }
+    & $taskDotnet run --project 'tests/AdbDesk.Qr.Tests' -c Release --no-build
+    if ($LASTEXITCODE -ne 0) { throw 'QR image regression tests failed.' }
     & $taskDotnet run --project 'tests/AdbDesk.Instance.Tests' -c Release --no-build
     if ($LASTEXITCODE -ne 0) { throw 'Single-instance regression tests failed.' }
     # A new output directory avoids overwriting a running app or retaining stale dependencies.
@@ -21,6 +23,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
     if (-not (Test-Path -LiteralPath (Join-Path $taskOutput 'tools/scrcpy/scrcpy.exe'))) { throw 'scrcpy missing from release.' }
     if (-not (Test-Path -LiteralPath (Join-Path $taskOutput 'tools/scrcpy/LICENSE.txt'))) { throw 'scrcpy license missing from release.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $taskOutput 'QRCoder.dll'))) { throw 'QR renderer missing from release.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $taskOutput 'licenses/QRCoder-LICENSE.txt'))) { throw 'QRCoder license missing from release.' }
     Copy-Item -LiteralPath (Join-Path $taskRoot 'README.md') -Destination $taskOutput
     Copy-Item -LiteralPath (Join-Path $taskRoot 'THIRD-PARTY-NOTICES.md') -Destination $taskOutput
     New-Item -ItemType Directory -Path (Join-Path $taskOutput 'docs') -Force | Out-Null

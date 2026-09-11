@@ -19,6 +19,8 @@ public partial class MainWindow : Window
     private AdbService? _adbService;
     private MirrorService? _mirrorService;
     private InstallQueue? _installQueue;
+    private PairingService? _pairingService;
+    private PairingWindow? _pairingWindow;
     private int _refreshing;
     private bool _servicesReady;
     private bool _isClosing;
@@ -52,6 +54,7 @@ public partial class MainWindow : Window
             _adbService = new AdbService(paths);
             _mirrorService = new MirrorService(paths);
             _installQueue = new InstallQueue(paths);
+            _pairingService = new PairingService(paths);
             _mirrorService.Changed += MirrorService_Changed;
             _installQueue.Changed += InstallQueue_Changed;
             _servicesReady = true;
@@ -172,6 +175,47 @@ public partial class MainWindow : Window
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshDevicesAsync();
 
     private async void RetryButton_Click(object sender, RoutedEventArgs e) => await InitializeServicesAsync();
+
+    private void QrPairingButton_Click(object sender, RoutedEventArgs e) => OpenPairingWindow(PairingTab.Qr);
+
+    private void CodePairingButton_Click(object sender, RoutedEventArgs e) => OpenPairingWindow(PairingTab.Code);
+
+    private void OpenPairingWindow(PairingTab initialTab)
+    {
+        if (_isClosing)
+        {
+            return;
+        }
+
+        if (_pairingService is null)
+        {
+            SetStatus("无线配对服务未就绪，请检查工具后重试", StatusKind.Warning);
+            return;
+        }
+
+        if (_pairingWindow is { IsLoaded: true })
+        {
+            _pairingWindow.SelectTab(initialTab);
+            if (_pairingWindow.WindowState == WindowState.Minimized) _pairingWindow.WindowState = WindowState.Normal;
+            _pairingWindow.Activate();
+            return;
+        }
+
+        var window = new PairingWindow(_pairingService, initialTab, RefreshDevicesAsync)
+        {
+            Owner = this
+        };
+        _pairingWindow = window;
+        window.Closed += async (_, _) =>
+        {
+            if (ReferenceEquals(_pairingWindow, window))
+            {
+                _pairingWindow = null;
+            }
+            if (!_isClosing) await RefreshDevicesAsync();
+        };
+        window.Show();
+    }
 
     private void StartSelectedButton_Click(object sender, RoutedEventArgs e)
     {
@@ -695,6 +739,8 @@ public partial class MainWindow : Window
 
         _isClosing = true;
         _deviceTimer.Stop();
+        _pairingWindow?.Close();
+        _pairingWindow = null;
         _lifetime.Cancel();
         DisposeServices();
         _lifetime.Dispose();
@@ -702,6 +748,10 @@ public partial class MainWindow : Window
 
     private void DisposeServices()
     {
+        _pairingWindow?.Close();
+        _pairingWindow = null;
+        _pairingService = null;
+
         if (_mirrorService is not null)
         {
             _mirrorService.Changed -= MirrorService_Changed;

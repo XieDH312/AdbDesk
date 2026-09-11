@@ -15,7 +15,8 @@ internal static class ProcessRunner
         Action<string>? standardError = null,
         CancellationToken cancellationToken = default,
         string? workingDirectory = null,
-        IReadOnlyDictionary<string, string?>? environment = null)
+        IReadOnlyDictionary<string, string?>? environment = null,
+        string? standardInput = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executable);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -29,6 +30,7 @@ internal static class ProcessRunner
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = standardInput is not null,
             WorkingDirectory = workingDirectory ?? Path.GetDirectoryName(Path.GetFullPath(executable)) ?? Environment.CurrentDirectory,
         };
         foreach (var argument in arguments)
@@ -52,11 +54,14 @@ internal static class ProcessRunner
         var stderrTask = ReadLinesAsync(process.StandardError, stderr, standardError);
         using var timeoutSource = new CancellationTokenSource(timeout);
         using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        var stdinTask = standardInput is null
+            ? Task.CompletedTask
+            : WriteInputAsync(process.StandardInput, standardInput, linkedSource.Token);
 
         try
         {
             await process.WaitForExitAsync(linkedSource.Token).ConfigureAwait(false);
-            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            await Task.WhenAll(stdoutTask, stderrTask, stdinTask).ConfigureAwait(false);
             return new ProcessResult(process.ExitCode, stdout.ToString(), stderr.ToString());
         }
         catch (OperationCanceledException)
@@ -64,7 +69,7 @@ internal static class ProcessRunner
             TryKill(process);
             try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); }
             catch (InvalidOperationException) { }
-            await IgnorePipeErrorsAsync(stdoutTask, stderrTask).ConfigureAwait(false);
+            await IgnorePipeErrorsAsync(stdoutTask, stderrTask, stdinTask).ConfigureAwait(false);
 
             if (cancellationToken.IsCancellationRequested)
             {
@@ -95,10 +100,24 @@ internal static class ProcessRunner
         }
     }
 
+    private static async Task WriteInputAsync(StreamWriter writer, string input, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await writer.WriteAsync(input.AsMemory(), cancellationToken).ConfigureAwait(false);
+            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            writer.Close();
+        }
+    }
+
     private static async Task IgnorePipeErrorsAsync(params Task[] tasks)
     {
         try { await Task.WhenAll(tasks).ConfigureAwait(false); }
         catch (IOException) { }
         catch (ObjectDisposedException) { }
+        catch (OperationCanceledException) { }
     }
 }

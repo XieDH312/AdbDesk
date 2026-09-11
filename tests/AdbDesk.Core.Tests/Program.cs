@@ -19,6 +19,11 @@ var tests = new (string Name, Func<Task> Run)[]
     ("wireless enable retries connect and verifies endpoint readiness", WirelessEnableAsync),
     ("wireless never reports connected from connect exit code alone", WirelessReadinessFailureAsync),
     ("wireless disable targets the selected USB device and restarts adbd on USB", WirelessDisableAsync),
+    ("QR pairing sessions are unique short lived and redact credentials", QrSessionAsync),
+    ("QR pairing selects only its exact service and GUID matched connect endpoint", QrPairingAsync),
+    ("pairing code validates inputs and keeps pairing and connection ports distinct", CodePairingAsync),
+    ("pair success remains distinct from verified connection", PairingPartialAsync),
+    ("pair failure cancellation and progress never expose credentials", PairingFailureAndCancellationAsync),
     ("process runner forwards output and bounds a hung child", ProcessRunnerAsync),
     ("install queue serializes each serial and permits only two global installs", InstallConcurrencyAsync),
     ("install queue cancels queued and running work", InstallCancellationAsync),
@@ -249,6 +254,134 @@ static string Properties(string marketName, string model, string androidVersion,
     [service.adb.tcp.port]: [{tcpPort}]
     """;
 
+static async Task QrSessionAsync()
+{
+    var before = DateTimeOffset.UtcNow;
+    var first = PairingService.CreateQrSession();
+    var second = PairingService.CreateQrSession();
+    var after = DateTimeOffset.UtcNow;
+
+    True(first.ServiceName.StartsWith("studio-", StringComparison.Ordinal), "QR service prefix");
+    Equal(17, first.ServiceName.Length, "studio prefix plus random ten characters");
+    True(first.ServiceName.All(character => char.IsAsciiLetterOrDigit(character) || character == '-'), "QR-safe service name");
+    True(first.Payload.StartsWith($"WIFI:T:ADB;S:{first.ServiceName};P:", StringComparison.Ordinal), "AOSP QR payload prefix");
+    True(first.Payload.EndsWith(";;", StringComparison.Ordinal), "AOSP QR payload terminator");
+    False(first.ServiceName == second.ServiceName, "independent service names");
+    False(first.Payload == second.Payload, "independent secrets");
+    True(first.ExpiresAt >= before.AddMinutes(2) && first.ExpiresAt <= after.AddMinutes(2), "two minute expiry");
+    False(first.ToString().Contains(first.ServiceName, StringComparison.Ordinal), "ToString redacts service name");
+    False(first.ToString().Contains(first.PairingSecret, StringComparison.Ordinal), "ToString redacts secret");
+
+    using var fixture = new ToolFixture();
+    var expired = new QrPairingSession(
+        "studio-Expired01",
+        "Secret1234567890",
+        DateTimeOffset.UtcNow.AddSeconds(-1));
+    var expiredResult = await fixture.PairingService().PairWithQrAsync(expired);
+    False(expiredResult.Paired, "expired QR is rejected");
+    Equal(0, fixture.CountCommand("mdns"), "expired QR starts no discovery");
+    Equal(0, fixture.CountCommand("pair"), "expired QR starts no pair process");
+}
+
+static async Task QrPairingAsync()
+{
+    using var fixture = new ToolFixture();
+    var session = PairingService.CreateQrSession();
+    fixture.SetMdnsBefore($"""
+        List of discovered mdns services
+        studio-unrelated _adb-tls-pairing._tcp 192.0.2.9:30001
+        {session.ServiceName} _adb-tls-pairing._tcp 192.0.2.10:37123
+        """);
+    fixture.SetPairResult("Successfully paired to 192.0.2.10:37123 [guid=adb-DEVICE-GUID]");
+    fixture.SetMdnsAfter("""
+        List of discovered mdns services
+        adb-OTHER-GUID _adb-tls-connect._tcp 192.0.2.99:49999
+        adb-DEVICE-GUID _adb-tls-connect._tcp 192.0.2.10:41567
+        """);
+    fixture.SetResponse("192.0.2.10:41567", "state", "device");
+    var progress = new ProgressCollector();
+
+    var result = await fixture.PairingService().PairWithQrAsync(session, progress);
+
+    True(result.Paired, "QR pair success parsed");
+    True(result.Connected, "QR connection readiness verified");
+    Equal("192.0.2.10:41567", result.Endpoint, "connect endpoint uses discovered dynamic port");
+    True(fixture.HasInvocation("pair", "192.0.2.10:37123"), "pair targets exact QR service endpoint");
+    True(fixture.HasInvocation("connect", "192.0.2.10:41567"), "connect targets GUID matched service endpoint");
+    False(fixture.HasInvocation("pair", "192.0.2.9:30001"), "unrelated QR service ignored");
+    False(fixture.HasInvocation("connect", "192.0.2.99:49999"), "unrelated connect service ignored");
+    False(fixture.AllInvocationText().Contains(session.PairingSecret, StringComparison.Ordinal), "QR secret absent from arguments and command log");
+    False(progress.Messages.Any(message => message.Contains(session.PairingSecret, StringComparison.Ordinal)), "QR secret absent from progress");
+}
+
+static async Task CodePairingAsync()
+{
+    using var fixture = new ToolFixture();
+    var service = fixture.PairingService();
+    await ThrowsAsync<ArgumentException>(() => service.PairWithCodeAsync("not-an-endpoint", "123456"));
+    await ThrowsAsync<ArgumentException>(() => service.PairWithCodeAsync("127.1:30123", "123456"));
+    await ThrowsAsync<ArgumentException>(() => service.PairWithCodeAsync("192.0.2.5:30123", "12345"));
+    await ThrowsAsync<ArgumentException>(() => service.PairWithCodeAsync("192.0.2.5:30123", "123456", "192.0.2.5"));
+    await ThrowsAsync<ArgumentException>(() => service.PairWithCodeAsync("192.0.2.5:30123", "123456", "192.0.2.6:42678"));
+    Equal(0, fixture.CountCommand("pair"), "invalid input starts no pair process");
+
+    fixture.SetPairResult("Successfully paired to 192.0.2.5:30123 [guid=adb-CODE-GUID]");
+    fixture.SetResponse("192.0.2.5:42678", "state", "device");
+    var progress = new ProgressCollector();
+    var result = await service.PairWithCodeAsync("192.0.2.5:30123", "123456", "192.0.2.5:42678", progress);
+
+    True(result.Paired && result.Connected, "code pairing and connection succeed");
+    Equal("192.0.2.5:42678", result.Endpoint, "explicit connection endpoint is preserved");
+    False(result.Endpoint.EndsWith(":30123", StringComparison.Ordinal), "pairing port is never reused as connection port");
+    False(fixture.AllInvocationText().Contains("123456", StringComparison.Ordinal), "pairing code absent from arguments and command log");
+    False(progress.Messages.Any(message => message.Contains("123456", StringComparison.Ordinal)), "pairing code absent from progress");
+}
+
+static async Task PairingPartialAsync()
+{
+    using var fixture = new ToolFixture();
+    fixture.SetPairResult("Enter pairing code: Successfully paired to 192.0.2.20:31234 [guid=adb-PARTIAL-GUID]");
+    fixture.SetMdnsAfter("adb-PARTIAL-GUID _adb-tls-connect._tcp 192.0.2.20:45678");
+    fixture.SetResponse("192.0.2.20:45678", "state", "offline");
+
+    var result = await fixture.PairingService().PairWithCodeAsync("192.0.2.20:31234", "654321");
+
+    True(result.Paired, "pair success is retained");
+    False(result.Connected, "connect exit zero alone is insufficient");
+    Equal("192.0.2.20:45678", result.Endpoint, "partial result exposes manual connection endpoint");
+    True(result.Message.Contains("配对成功", StringComparison.Ordinal), "partial message distinguishes paired state");
+    False(fixture.AllInvocationText().Contains(":5555", StringComparison.Ordinal), "TLS pairing never falls back to 5555");
+}
+
+static async Task PairingFailureAndCancellationAsync()
+{
+    using var failedFixture = new ToolFixture();
+    failedFixture.SetPairResult("Failed: pairing code 112233 rejected", exitCode: 0);
+    var progress = new ProgressCollector();
+    var failed = await failedFixture.PairingService().PairWithCodeAsync("192.0.2.30:32345", "112233", progress: progress);
+    False(failed.Paired, "exit zero without success text does not establish pairing");
+    False(failed.Connected, "failed pair does not connect");
+    Equal(0, failedFixture.CountCommand("connect"), "failed pair starts no connect");
+    False(failed.Message.Contains("112233", StringComparison.Ordinal), "failure message redacts code");
+
+    using var discoveryFixture = new ToolFixture();
+    var discoverySession = PairingService.CreateQrSession();
+    using var discoveryCancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+    await ThrowsAsync<OperationCanceledException>(() => discoveryFixture.PairingService().PairWithQrAsync(
+        discoverySession,
+        cancellationToken: discoveryCancellation.Token));
+    Equal(0, discoveryFixture.CountCommand("pair"), "cancelled discovery submits no pair request");
+
+    using var canceledFixture = new ToolFixture();
+    canceledFixture.SetPairHang();
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+    await ThrowsAsync<OperationCanceledException>(() => canceledFixture.PairingService().PairWithCodeAsync(
+        "192.0.2.31:32346", "445566", cancellationToken: cancellation.Token));
+    await canceledFixture.WaitForProcessesToExitAsync(TimeSpan.FromSeconds(4));
+    False(canceledFixture.HasLiveProcesses(), "pair cancellation kills owned child");
+    False(canceledFixture.AllInvocationText().Contains("445566", StringComparison.Ordinal), "canceled code absent from logs");
+}
+
 static async Task ProcessRunnerAsync()
 {
     using var fixture = new ToolFixture();
@@ -463,6 +596,12 @@ sealed class UpdateCollector
     }
 }
 
+sealed class ProgressCollector : IProgress<string>
+{
+    public ConcurrentQueue<string> Messages { get; } = new();
+    public void Report(string value) => Messages.Enqueue(value);
+}
+
 sealed record ToolRun(string Serial, string ApkName, DateTime Start, DateTime End);
 
 sealed class ToolFixture : IDisposable
@@ -473,6 +612,11 @@ sealed class ToolFixture : IDisposable
     private readonly string? _previousDelay = Environment.GetEnvironmentVariable("ADBDESK_TEST_DELAY_MS");
     private readonly string? _previousProbeDelay = Environment.GetEnvironmentVariable("ADBDESK_TEST_PROBE_DELAY_MS");
     private readonly string? _previousConnectFailures = Environment.GetEnvironmentVariable("ADBDESK_TEST_CONNECT_FAILURES");
+    private readonly string? _previousMdnsBefore = Environment.GetEnvironmentVariable("ADBDESK_TEST_MDNS_BEFORE");
+    private readonly string? _previousMdnsAfter = Environment.GetEnvironmentVariable("ADBDESK_TEST_MDNS_AFTER");
+    private readonly string? _previousPairResult = Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_RESULT");
+    private readonly string? _previousPairExit = Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_EXIT");
+    private readonly string? _previousPairHang = Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_HANG");
     public ToolPaths Paths { get; }
     public string DirectoryPath => _directory.Path;
 
@@ -492,6 +636,15 @@ sealed class ToolFixture : IDisposable
         File.WriteAllText(FakeTool.ResponsePath(_directory.Path, serial, kind), output);
     public void SetFailure(string serial, string kind, string error) =>
         File.WriteAllText(FakeTool.ResponsePath(_directory.Path, serial, kind) + ".failure", error);
+    public void SetMdnsBefore(string output) => Environment.SetEnvironmentVariable("ADBDESK_TEST_MDNS_BEFORE", output);
+    public void SetMdnsAfter(string output) => Environment.SetEnvironmentVariable("ADBDESK_TEST_MDNS_AFTER", output);
+    public void SetPairResult(string output, int exitCode = 0)
+    {
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_PAIR_RESULT", output);
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_PAIR_EXIT", exitCode.ToString());
+    }
+    public void SetPairHang() => Environment.SetEnvironmentVariable("ADBDESK_TEST_PAIR_HANG", "1");
+    public PairingService PairingService() => new(Paths, TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(250));
     public string CreateApk(string name)
     {
         var path = Path.Combine(_directory.Path, name);
@@ -554,6 +707,7 @@ sealed class ToolFixture : IDisposable
         command == "getprop" ? arguments.AsSpan().EndsWith(["shell", "getprop"], StringComparer.Ordinal) : arguments.Contains(command, StringComparer.Ordinal));
     public int CountCommand(string command) => ReadInvocations().Count(arguments => arguments.Contains(command, StringComparer.Ordinal));
     public bool HasInvocation(params string[] expected) => ReadInvocations().Any(arguments => arguments.SequenceEqual(expected));
+    public string AllInvocationText() => string.Join(Environment.NewLine, ReadInvocations().Select(arguments => string.Join('|', arguments)));
     public int MaximumProbeConcurrency()
     {
         var runs = Directory.GetFiles(_directory.Path, "probe-*.start").Select(start =>
@@ -580,6 +734,11 @@ sealed class ToolFixture : IDisposable
         Environment.SetEnvironmentVariable("ADBDESK_TEST_DELAY_MS", _previousDelay);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_PROBE_DELAY_MS", _previousProbeDelay);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_CONNECT_FAILURES", _previousConnectFailures);
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_MDNS_BEFORE", _previousMdnsBefore);
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_MDNS_AFTER", _previousMdnsAfter);
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_PAIR_RESULT", _previousPairResult);
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_PAIR_EXIT", _previousPairExit);
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_PAIR_HANG", _previousPairHang);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_DEVICES", null);
         _directory.Dispose();
     }
@@ -630,6 +789,36 @@ static class FakeTool
         if (arguments.SequenceEqual(["hang"]))
         {
             await Task.Delay(TimeSpan.FromMinutes(2));
+            return;
+        }
+        if (arguments.SequenceEqual(["mdns", "services"]))
+        {
+            var paired = File.Exists(Path.Combine(directory, "pair-complete.txt"));
+            Console.Write(paired
+                ? Environment.GetEnvironmentVariable("ADBDESK_TEST_MDNS_AFTER")
+                : Environment.GetEnvironmentVariable("ADBDESK_TEST_MDNS_BEFORE"));
+            return;
+        }
+        if (arguments is ["pair", _])
+        {
+            var secret = (await Console.In.ReadToEndAsync()).Trim();
+            if (secret.Length == 0)
+            {
+                Console.Error.WriteLine("pairing secret missing from stdin");
+                Environment.ExitCode = 8;
+                return;
+            }
+            if (Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_HANG") == "1")
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory, $"pair-{Environment.ProcessId}.start"), DateTime.UtcNow.Ticks.ToString());
+                await Task.Delay(TimeSpan.FromMinutes(2));
+                return;
+            }
+            var result = Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_RESULT") ?? "Failed: no configured pair result";
+            Console.WriteLine(result);
+            if (result.Contains("Successfully paired to", StringComparison.Ordinal))
+                await File.WriteAllTextAsync(Path.Combine(directory, "pair-complete.txt"), "done");
+            Environment.ExitCode = int.TryParse(Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_EXIT"), out var pairExit) ? pairExit : 0;
             return;
         }
         if (arguments.Contains("install", StringComparer.Ordinal))

@@ -12,9 +12,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AdbDesk.Core\AdbDesk.Core.csproj" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\..\licenses\QRCoder-LICENSE.txt">
+      <Link>licenses\QRCoder-LICENSE.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
     <Content Include="..\..\tools\scrcpy\**\*">
       <Link>tools\scrcpy\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
