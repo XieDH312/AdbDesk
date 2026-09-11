@@ -1,0 +1,42 @@
+# AdbDesk 安卓设备助手
+
+Windows 10/11 x64 桌面工具。设备列表自动刷新，每台手机独立投屏窗口，鼠标键盘控制，APK 拖放安装。
+
+## 使用
+
+1. 解压完整便携包，双击 `AdbDesk.exe`。保留旁边的运行库和 `tools` 文件夹。
+2. 手机开启开发者选项、USB 调试，通过数据线连接，并在手机上允许电脑调试。主界面也会列出 ADB 已连接的网络设备。
+3. 点击设备的投屏按钮，或勾选多台后批量投屏。窗口彼此独立，关闭一台不影响其他手机。
+4. APK 拖入某台设备行或其投屏窗口，安装到该设备。拖到公共安装区域或点击安装按钮，会展示选中目标，确认后安装。
+5. 安装任务列表显示主界面发起的安装结果；投屏窗口直接拖放产生的结果显示在投屏日志中。
+
+鼠标左键点击/拖动对应触摸，右键返回，中键回到桌面；快捷键行为以 scrcpy 官方文档为准。
+质量选项对新打开的投屏生效。多台投屏建议使用较低画质并关闭声音。
+
+## 连接与安装提示
+
+- **待授权**：查看手机上的 USB 调试授权弹窗。
+- **离线/未发现**：检查数据线、手机 USB 模式、Windows 驱动及调试开关。
+- 部分品牌需要额外开启“USB 调试（安全设置）”或“USB 安装”，在手机完成确认。
+- 第一版支持普通 `.apk`，不支持 `.aab`、`.apks` 或 `.xapk`。
+- 默认覆盖安装并保留数据；签名冲突和版本降级会报错，不会自动卸载旧应用。
+- 取消会停止排队或本地安装进程，不能撤销手机端已完成的安装。
+- 不同设备的任务最多两个并发，同一台设备按顺序安装。
+- 投屏窗口直接拖放由 scrcpy 管理，独立于主界面队列，不能从任务列表取消。
+- 程序不会执行 `adb kill-server`，只关闭自己创建的投屏和安装进程。
+- 不需要管理员运行；普通权限也有利于从资源管理器拖放文件。
+
+## 开发与构建
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\build.ps1 -SkipSetup
+```
+
+SDK 安装在项目 `.tools/dotnet`，不会修改系统 SDK。官方工具在 `tools/scrcpy`，下载包进行校验。
+运行 `scripts/build.ps1` 会构建、执行回归测试并生成自带 .NET 运行时的便携 ZIP，输出在 `dist`。
+也可直接用 `.tools/dotnet/dotnet.exe run --project src/AdbDesk.App` 开发运行。
+
+源码：`src/AdbDesk.Core` 是进程/ADB/投屏/安装队列；`src/AdbDesk.App` 是 WPF 界面。
+工具目录可用 `ADBDESK_TOOLS` 环境变量指定，其中必须包含 `adb.exe`、`scrcpy.exe` 及配套文件。
+验证范围见 `docs/verification.md`。
