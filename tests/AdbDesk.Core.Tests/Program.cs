@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using AdbDesk.Core;
 
 if (Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL") == "1")
@@ -11,6 +13,12 @@ if (Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL") == "1")
 var tests = new (string Name, Func<Task> Run)[]
 {
     ("device enumeration parses states and routes through explicit adb arguments", DeviceEnumerationAsync),
+    ("device enumeration enriches names versions and authoritative transports", DeviceDetailsAsync),
+    ("device detail probes are cached bounded and preserve partial devices", DeviceDetailCacheAsync),
+    ("wireless enable requires a freshly authorized physical USB transport and Wi-Fi IPv4", WirelessPreconditionsAsync),
+    ("wireless enable retries connect and verifies endpoint readiness", WirelessEnableAsync),
+    ("wireless never reports connected from connect exit code alone", WirelessReadinessFailureAsync),
+    ("wireless disable targets the selected USB device and restarts adbd on USB", WirelessDisableAsync),
     ("process runner forwards output and bounds a hung child", ProcessRunnerAsync),
     ("install queue serializes each serial and permits only two global installs", InstallConcurrencyAsync),
     ("install queue cancels queued and running work", InstallCancellationAsync),
@@ -60,6 +68,186 @@ static async Task DeviceEnumerationAsync()
     Equal("offline", devices.Single(device => device.Serial == "serial-C").State, "offline state");
     Equal("devices|-l", await fixture.ReadInvocationAsync("adb"), "adb enumeration arguments");
 }
+
+static async Task DeviceDetailsAsync()
+{
+    using var fixture = new ToolFixture();
+    fixture.SetDevices("""
+        List of devices attached
+        physical-one device product:husky model:Raw_Model transport_id:1
+        libusb-one device product:oriole model:Libusb_Model transport_id:2
+        192.0.2.20:5555 device product:husky model:Network_Model transport_id:3
+        adb-TLS._adb-tls-connect._tcp device product:husky model:Tls_Model transport_id:4
+        emulator-5554 device product:sdk_gphone model:Emulator_Model transport_id:5
+        locked-one unauthorized usb:2-1 transport_id:6
+        """);
+    fixture.SetResponse("physical-one", "devpath", "usb:4.0.1");
+    fixture.SetResponse("physical-one", "device-name", "Owner Pixel");
+    fixture.SetResponse("physical-one", "getprop", Properties("Retail Pixel", "Pixel 9 Pro", "16", "5555"));
+    fixture.SetResponse("libusb-one", "devpath", "4.0.2");
+    fixture.SetResponse("libusb-one", "getprop", Properties("", "Pixel 8", "15", "-1"));
+    fixture.SetResponse("192.0.2.20:5555", "devpath", "unknown");
+    fixture.SetResponse("192.0.2.20:5555", "getprop", Properties("Living Room", "Pixel Fold", "15", "5555"));
+    fixture.SetResponse("adb-TLS._adb-tls-connect._tcp", "devpath", "unknown");
+    fixture.SetResponse("adb-TLS._adb-tls-connect._tcp", "getprop", Properties("TLS Phone", "Pixel 8a", "15", "-1"));
+    fixture.SetResponse("emulator-5554", "devpath", "unknown");
+    fixture.SetResponse("emulator-5554", "getprop", Properties("", "Virtual Phone", "16", "5555"));
+
+    var devices = await new AdbService(fixture.Paths).GetDevicesAsync();
+
+    var physical = devices.Single(device => device.Serial == "physical-one");
+    Equal("Owner Pixel", physical.DeviceName, "user configured device name takes priority");
+    Equal("Pixel 9 Pro", physical.Model, "property model replaces list fallback");
+    Equal("16", physical.AndroidVersion, "Android version");
+    Equal(DeviceTransport.Usb, physical.Transport, "native USB devpath");
+    Equal(5555, physical.WirelessPort, "plain TCP daemon port");
+
+    Equal(DeviceTransport.Usb, devices.Single(device => device.Serial == "libusb-one").Transport,
+        "libusb path without usb prefix remains physical USB");
+    Equal(DeviceTransport.Network, devices.Single(device => device.Serial == "192.0.2.20:5555").Transport,
+        "plain TCP endpoint transport");
+    var tls = devices.Single(device => device.Serial == "adb-TLS._adb-tls-connect._tcp");
+    Equal(DeviceTransport.Network, tls.Transport, "TLS mDNS endpoint transport");
+    Equal(null, tls.WirelessPort, "TLS transport is distinct from plain TCP daemon mode");
+    Equal(DeviceTransport.Emulator, devices.Single(device => device.Serial == "emulator-5554").Transport,
+        "emulator transport");
+
+    var locked = devices.Single(device => device.Serial == "locked-one");
+    Equal(DeviceTransport.Unknown, locked.Transport, "unauthorized transport is not guessed from serial shape");
+    Equal(0, fixture.InvocationsForSerial("locked-one").Count, "unauthorized device has no probes");
+}
+
+static async Task DeviceDetailCacheAsync()
+{
+    using var fixture = new ToolFixture();
+    fixture.SetDevices("List of devices attached\ncache-one device model:List_Model transport_id:1\n");
+    fixture.SetResponse("cache-one", "devpath", "usb:9.1");
+    fixture.SetFailure("cache-one", "getprop", "property service unavailable");
+    var service = new AdbService(fixture.Paths);
+
+    var first = (await service.GetDevicesAsync()).Single();
+    var second = (await service.GetDevicesAsync()).Single();
+
+    Equal("List Model", first.Model, "list model survives failed detail probe");
+    Equal(DeviceTransport.Usb, first.Transport, "successful transport probe survives property failure");
+    True(first.DetailsError.Contains("property service unavailable", StringComparison.Ordinal), "probe error is exposed");
+    Equal(first, second, "cached detail result");
+    Equal(1, fixture.CountInvocation("cache-one", "getprop"), "property probe cache");
+    Equal(1, fixture.CountInvocation("cache-one", "get-devpath"), "devpath probe cache");
+
+    fixture.SetDevices("""
+        List of devices attached
+        probe-1 device model:One
+        probe-2 device model:Two
+        probe-3 device model:Three
+        probe-4 device model:Four
+        probe-5 device model:Five
+        probe-6 device model:Six
+        """);
+    fixture.SetProbeDelay(200);
+    foreach (var serial in Enumerable.Range(1, 6).Select(number => $"probe-{number}"))
+    {
+        fixture.SetResponse(serial, "devpath", $"usb:{serial}");
+        fixture.SetResponse(serial, "getprop", Properties("", serial, "15", "-1"));
+    }
+    await new AdbService(fixture.Paths).GetDevicesAsync();
+    True(fixture.MaximumProbeConcurrency() <= 4, "detail probe concurrency is bounded to four devices");
+    True(fixture.MaximumProbeConcurrency() >= 2, "independent device probes overlap");
+}
+
+static async Task WirelessPreconditionsAsync()
+{
+    using var unauthorizedFixture = new ToolFixture();
+    unauthorizedFixture.SetDevices("List of devices attached\nwire-one unauthorized usb:1-1\n");
+    var unauthorized = await new AdbService(unauthorizedFixture.Paths).SetWirelessAsync(
+        new DeviceInfo("wire-one", "Phone", "device") { Transport = DeviceTransport.Usb }, true);
+    False(unauthorized.ModeEnabled, "authorization loss blocks mutation");
+    False(unauthorized.Succeeded, "authorization loss result is explicit failure");
+    Equal(0, unauthorizedFixture.CountCommand("tcpip"), "no tcpip after authorization loss");
+
+    using var networkFixture = new ToolFixture();
+    networkFixture.SetDevices("List of devices attached\nnetwork-alias device model:Phone\n");
+    networkFixture.SetResponse("network-alias", "devpath", "unknown");
+    var network = await new AdbService(networkFixture.Paths).SetWirelessAsync(
+        new DeviceInfo("network-alias", "Phone", "device") { Transport = DeviceTransport.Usb }, true);
+    False(network.ModeEnabled, "missing physical devpath blocks mutation even without colon in serial");
+    Equal(0, networkFixture.CountCommand("tcpip"), "no tcpip for non-USB transport");
+
+    using var noWifiFixture = ReadyUsbWirelessFixture("wire-two");
+    noWifiFixture.SetResponse("wire-two", "wifi", "");
+    var noWifi = await new AdbService(noWifiFixture.Paths).SetWirelessAsync(
+        new DeviceInfo("wire-two", "Phone", "device") { Transport = DeviceTransport.Usb }, true);
+    False(noWifi.ModeEnabled, "missing Wi-Fi IPv4 blocks TCP mode");
+    Equal(0, noWifiFixture.CountCommand("tcpip"), "Wi-Fi discovery happens before tcpip mutation");
+}
+
+static async Task WirelessEnableAsync()
+{
+    using var fixture = ReadyUsbWirelessFixture("wire-three");
+    fixture.SetResponse("wire-three", "wifi", "7: wlan0    inet 192.0.2.44/24 brd 192.0.2.255 scope global wlan0");
+    fixture.SetConnectFailures(1);
+    fixture.SetResponse("192.0.2.44:5555", "state", "device");
+    var service = new AdbService(fixture.Paths);
+    await service.GetDevicesAsync();
+
+    var result = await service.SetWirelessAsync(
+        new DeviceInfo("wire-three", "Phone", "device") { Transport = DeviceTransport.Usb }, true);
+
+    True(result.ModeEnabled, "TCP daemon mode enabled");
+    True(result.Connected, "endpoint verified ready");
+    True(result.Succeeded, "fully verified enable succeeds");
+    Equal("192.0.2.44:5555", result.Endpoint, "wireless endpoint");
+    Equal(2, fixture.CountCommand("connect"), "connect retries after daemon restart");
+    True(fixture.HasInvocation("-s", "wire-three", "tcpip", "5555"), "tcpip targets selected USB serial");
+    True(fixture.HasInvocation("connect", "192.0.2.44:5555"), "connect targets discovered endpoint");
+    True(fixture.HasInvocation("-s", "192.0.2.44:5555", "get-state"), "readiness checks exact endpoint");
+
+    await service.GetDevicesAsync();
+    Equal(2, fixture.CountInvocation("wire-three", "getprop"), "state mutation invalidates detail cache");
+}
+
+static async Task WirelessReadinessFailureAsync()
+{
+    using var fixture = ReadyUsbWirelessFixture("wire-four");
+    fixture.SetResponse("wire-four", "wifi", "inet 198.51.100.8/24 scope global wlan0");
+    fixture.SetResponse("198.51.100.8:5555", "state", "offline");
+    var result = await new AdbService(fixture.Paths).SetWirelessAsync(
+        new DeviceInfo("wire-four", "Phone", "device") { Transport = DeviceTransport.Usb }, true);
+    True(result.ModeEnabled, "TCP mode remains enabled when host readiness fails");
+    False(result.Connected, "connect exit zero alone is insufficient");
+    False(result.Succeeded, "partial enable is explicit failure");
+    True(result.Message.Contains("未连接", StringComparison.Ordinal), "partial result is explicit");
+}
+
+static async Task WirelessDisableAsync()
+{
+    using var fixture = ReadyUsbWirelessFixture("wire-five");
+    var result = await new AdbService(fixture.Paths).SetWirelessAsync(
+        new DeviceInfo("wire-five", "Phone", "device") { Transport = DeviceTransport.Usb }, false);
+    False(result.ModeEnabled, "USB mode disables plain TCP mode");
+    False(result.Connected, "disable result has no wireless connection");
+    True(result.Succeeded, "verified USB restart succeeds");
+    True(fixture.HasInvocation("-s", "wire-five", "usb"), "adb usb targets selected device");
+    Equal(0, fixture.CountCommand("disconnect"), "disable never uses host-only disconnect");
+}
+
+static ToolFixture ReadyUsbWirelessFixture(string serial)
+{
+    var fixture = new ToolFixture();
+    fixture.SetDevices($"List of devices attached{Environment.NewLine}{serial} device model:Phone transport_id:1{Environment.NewLine}");
+    fixture.SetResponse(serial, "devpath", "usb:1.2");
+    fixture.SetResponse(serial, "getprop", Properties("Phone", "Phone", "15", "-1"));
+    fixture.SetResponse(serial, "tcpip", "restarting in TCP mode port: 5555");
+    fixture.SetResponse(serial, "usb", "restarting in USB mode");
+    return fixture;
+}
+
+static string Properties(string marketName, string model, string androidVersion, string tcpPort) => $"""
+    [ro.product.marketname]: [{marketName}]
+    [ro.product.model]: [{model}]
+    [ro.build.version.release]: [{androidVersion}]
+    [service.adb.tcp.port]: [{tcpPort}]
+    """;
 
 static async Task ProcessRunnerAsync()
 {
@@ -283,6 +471,8 @@ sealed class ToolFixture : IDisposable
     private readonly string? _previousMode = Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL");
     private readonly string? _previousDirectory = Environment.GetEnvironmentVariable("ADBDESK_TEST_DIRECTORY");
     private readonly string? _previousDelay = Environment.GetEnvironmentVariable("ADBDESK_TEST_DELAY_MS");
+    private readonly string? _previousProbeDelay = Environment.GetEnvironmentVariable("ADBDESK_TEST_PROBE_DELAY_MS");
+    private readonly string? _previousConnectFailures = Environment.GetEnvironmentVariable("ADBDESK_TEST_CONNECT_FAILURES");
     public ToolPaths Paths { get; }
     public string DirectoryPath => _directory.Path;
 
@@ -295,6 +485,13 @@ sealed class ToolFixture : IDisposable
     }
 
     public void SetDelay(int milliseconds) => Environment.SetEnvironmentVariable("ADBDESK_TEST_DELAY_MS", milliseconds.ToString());
+    public void SetProbeDelay(int milliseconds) => Environment.SetEnvironmentVariable("ADBDESK_TEST_PROBE_DELAY_MS", milliseconds.ToString());
+    public void SetConnectFailures(int count) => Environment.SetEnvironmentVariable("ADBDESK_TEST_CONNECT_FAILURES", count.ToString());
+    public void SetDevices(string output) => Environment.SetEnvironmentVariable("ADBDESK_TEST_DEVICES", output);
+    public void SetResponse(string serial, string kind, string output) =>
+        File.WriteAllText(FakeTool.ResponsePath(_directory.Path, serial, kind), output);
+    public void SetFailure(string serial, string kind, string error) =>
+        File.WriteAllText(FakeTool.ResponsePath(_directory.Path, serial, kind) + ".failure", error);
     public string CreateApk(string name)
     {
         var path = Path.Combine(_directory.Path, name);
@@ -350,11 +547,39 @@ sealed class ToolFixture : IDisposable
         .Any(pid => { try { return !Process.GetProcessById(pid).HasExited; } catch { return false; } });
     public Task WaitForProcessesToExitAsync(TimeSpan timeout) => TestWait.UntilAsync(() => !HasLiveProcesses(), timeout);
 
+    public IReadOnlyList<string[]> InvocationsForSerial(string serial) => ReadInvocations()
+        .Where(arguments => Array.IndexOf(arguments, "-s") is var index && index >= 0 && index + 1 < arguments.Length && arguments[index + 1] == serial)
+        .ToArray();
+    public int CountInvocation(string serial, string command) => InvocationsForSerial(serial).Count(arguments =>
+        command == "getprop" ? arguments.AsSpan().EndsWith(["shell", "getprop"], StringComparer.Ordinal) : arguments.Contains(command, StringComparer.Ordinal));
+    public int CountCommand(string command) => ReadInvocations().Count(arguments => arguments.Contains(command, StringComparer.Ordinal));
+    public bool HasInvocation(params string[] expected) => ReadInvocations().Any(arguments => arguments.SequenceEqual(expected));
+    public int MaximumProbeConcurrency()
+    {
+        var runs = Directory.GetFiles(_directory.Path, "probe-*.start").Select(start =>
+        {
+            var end = Path.ChangeExtension(start, ".end");
+            return (Start: long.Parse(File.ReadAllText(start)), End: long.Parse(File.ReadAllText(end)));
+        }).ToArray();
+        return runs.SelectMany(run => new[] { (run.Start, 1), (run.End, -1) })
+            .OrderBy(point => point.Item1).ThenBy(point => point.Item2)
+            .Aggregate((Current: 0, Maximum: 0), (state, point) =>
+            {
+                var current = state.Current + point.Item2;
+                return (current, Math.Max(current, state.Maximum));
+            }).Maximum;
+    }
+
+    private IReadOnlyList<string[]> ReadInvocations() => Directory.GetFiles(_directory.Path, "call-*.txt")
+        .Select(path => File.ReadAllText(path).Split('|')).ToArray();
+
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL", _previousMode);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_DIRECTORY", _previousDirectory);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_DELAY_MS", _previousDelay);
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_PROBE_DELAY_MS", _previousProbeDelay);
+        Environment.SetEnvironmentVariable("ADBDESK_TEST_CONNECT_FAILURES", _previousConnectFailures);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_DEVICES", null);
         _directory.Dispose();
     }
@@ -389,6 +614,7 @@ static class FakeTool
     public static async Task RunAsync(string[] arguments)
     {
         var directory = Environment.GetEnvironmentVariable("ADBDESK_TEST_DIRECTORY")!;
+        await File.WriteAllTextAsync(Path.Combine(directory, $"call-{DateTime.UtcNow.Ticks}-{Environment.ProcessId}.txt"), string.Join('|', arguments));
         if (arguments.SequenceEqual(["devices", "-l"]))
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "adb-invocation.txt"), string.Join('|', arguments));
@@ -411,7 +637,82 @@ static class FakeTool
             await RunInstallAsync(directory, arguments);
             return;
         }
+        if (arguments is ["-s", var serial, "get-devpath"])
+        {
+            await RespondAsync(directory, serial, "devpath");
+            return;
+        }
+        if (arguments is ["-s", var propertySerial, "shell", "getprop"])
+        {
+            var key = $"probe-{Environment.ProcessId}";
+            await File.WriteAllTextAsync(Path.Combine(directory, $"{key}.start"), DateTime.UtcNow.Ticks.ToString());
+            if (int.TryParse(Environment.GetEnvironmentVariable("ADBDESK_TEST_PROBE_DELAY_MS"), out var delay))
+                await Task.Delay(delay);
+            await RespondAsync(directory, propertySerial, "getprop");
+            await File.WriteAllTextAsync(Path.Combine(directory, $"{key}.end"), DateTime.UtcNow.Ticks.ToString());
+            return;
+        }
+        if (arguments is ["-s", var nameSerial, "shell", "settings", "get", "global", "device_name"])
+        {
+            await RespondAsync(directory, nameSerial, "device-name");
+            return;
+        }
+        if (arguments is ["-s", var wifiSerial, "shell", "ip", "-o", "-4", "addr", "show", "wlan0"])
+        {
+            await RespondAsync(directory, wifiSerial, "wifi");
+            return;
+        }
+        if (arguments is ["-s", var modeSerial, "tcpip", "5555"])
+        {
+            await RespondAsync(directory, modeSerial, "tcpip");
+            return;
+        }
+        if (arguments is ["-s", var usbSerial, "usb"])
+        {
+            await RespondAsync(directory, usbSerial, "usb");
+            return;
+        }
+        if (arguments is ["connect", var endpoint])
+        {
+            var counterPath = Path.Combine(directory, "connect-count.txt");
+            var attempt = File.Exists(counterPath) ? int.Parse(await File.ReadAllTextAsync(counterPath)) + 1 : 1;
+            await File.WriteAllTextAsync(counterPath, attempt.ToString());
+            var failures = int.TryParse(Environment.GetEnvironmentVariable("ADBDESK_TEST_CONNECT_FAILURES"), out var count) ? count : 0;
+            if (attempt <= failures)
+            {
+                Console.Error.WriteLine($"cannot connect to {endpoint}");
+                Environment.ExitCode = 1;
+            }
+            else
+            {
+                Console.WriteLine($"connected to {endpoint}");
+            }
+            return;
+        }
+        if (arguments is ["-s", var stateSerial, "get-state"])
+        {
+            await RespondAsync(directory, stateSerial, "state");
+            return;
+        }
         await RunMirrorAsync(directory, arguments);
+    }
+
+    public static string ResponsePath(string directory, string serial, string kind)
+    {
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serial)));
+        return Path.Combine(directory, $"response-{key}-{kind}.txt");
+    }
+
+    private static async Task RespondAsync(string directory, string serial, string kind)
+    {
+        var path = ResponsePath(directory, serial, kind);
+        if (File.Exists(path + ".failure"))
+        {
+            Console.Error.WriteLine(await File.ReadAllTextAsync(path + ".failure"));
+            Environment.ExitCode = 7;
+            return;
+        }
+        if (File.Exists(path)) Console.Write(await File.ReadAllTextAsync(path));
     }
 
     private static async Task RunInstallAsync(string directory, string[] arguments)

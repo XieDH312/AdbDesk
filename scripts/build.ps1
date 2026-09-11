@@ -12,6 +12,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
     & $taskDotnet run --project 'tests/AdbDesk.Core.Tests' -c Release --no-build
     if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed.' }
+    & $taskDotnet run --project 'tests/AdbDesk.Instance.Tests' -c Release --no-build
+    if ($LASTEXITCODE -ne 0) { throw 'Single-instance regression tests failed.' }
     # A new output directory avoids overwriting a running app or retaining stale dependencies.
     $taskStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $taskOutput = Join-Path $taskRoot "dist/AdbDesk-win-x64-$taskStamp"

@@ -10,6 +10,8 @@ public sealed class DeviceRow : INotifyPropertyChanged
     private DeviceInfo _device;
     private bool _isSelected;
     private bool _isMirroring;
+    private bool _isWirelessBusy;
+    private string _wirelessStatusMessage = string.Empty;
 
     public DeviceRow(DeviceInfo device)
     {
@@ -19,9 +21,35 @@ public sealed class DeviceRow : INotifyPropertyChanged
     public DeviceInfo Device => _device;
     public string Serial => _device.Serial;
     public string Model => string.IsNullOrWhiteSpace(_device.Model) ? "未知设备" : _device.Model;
+    public string DisplayName => string.IsNullOrWhiteSpace(_device.DeviceName) ? Model : _device.DeviceName;
+    public string ModelAndAndroid
+    {
+        get
+        {
+            var model = $"型号 {Model}";
+            return string.IsNullOrWhiteSpace(_device.AndroidVersion)
+                ? $"{model} · Android 版本未知"
+                : $"{model} · Android {_device.AndroidVersion}";
+        }
+    }
+
+    public string TransportText => _device.Transport switch
+    {
+        DeviceTransport.Usb => "USB",
+        DeviceTransport.Network => _device.WirelessPort is int port ? $"无线 ADB :{port}" : "无线 ADB",
+        DeviceTransport.Emulator => "模拟器",
+        _ => "连接方式未知"
+    };
+
+    public string SerialAndTransport => $"{Serial}  ·  {TransportText}";
+    public string DetailsTooltip => string.IsNullOrWhiteSpace(_device.DetailsError)
+        ? ModelAndAndroid
+        : $"设备详情读取失败：{_device.DetailsError}";
     public string State => _device.State;
     public bool IsReady => _device.IsReady;
     public bool CanMirrorAction => IsReady || IsMirroring;
+    public bool ShowWirelessActions => IsReady && _device.Transport == DeviceTransport.Usb;
+    public bool CanWirelessAction => ShowWirelessActions && !IsWirelessBusy;
     public string StateText => _device.State switch
     {
         "device" => "已连接",
@@ -64,16 +92,56 @@ public sealed class DeviceRow : INotifyPropertyChanged
         }
     }
 
+    public bool IsWirelessBusy
+    {
+        get => _isWirelessBusy;
+        set
+        {
+            if (SetField(ref _isWirelessBusy, value))
+            {
+                OnPropertyChanged(nameof(CanWirelessAction));
+                OnPropertyChanged(nameof(WirelessBusyText));
+                OnPropertyChanged(nameof(HasWirelessStatus));
+            }
+        }
+    }
+
+    public string WirelessBusyText => IsWirelessBusy ? "正在切换连接方式…" : WirelessStatusMessage;
+
+    public string WirelessStatusMessage
+    {
+        get => _wirelessStatusMessage;
+        private set
+        {
+            if (SetField(ref _wirelessStatusMessage, value))
+            {
+                OnPropertyChanged(nameof(WirelessBusyText));
+                OnPropertyChanged(nameof(HasWirelessStatus));
+            }
+        }
+    }
+
+    public bool HasWirelessStatus => !string.IsNullOrWhiteSpace(WirelessBusyText);
+
     public string MirrorActionText => IsMirroring ? "停止投屏" : "开始投屏";
+
+    public void SetWirelessStatus(string message) => WirelessStatusMessage = message;
 
     public void Update(DeviceInfo device)
     {
         _device = device;
         OnPropertyChanged(nameof(Device));
         OnPropertyChanged(nameof(Model));
+        OnPropertyChanged(nameof(DisplayName));
+        OnPropertyChanged(nameof(ModelAndAndroid));
+        OnPropertyChanged(nameof(TransportText));
+        OnPropertyChanged(nameof(SerialAndTransport));
+        OnPropertyChanged(nameof(DetailsTooltip));
         OnPropertyChanged(nameof(State));
         OnPropertyChanged(nameof(IsReady));
         OnPropertyChanged(nameof(CanMirrorAction));
+        OnPropertyChanged(nameof(ShowWirelessActions));
+        OnPropertyChanged(nameof(CanWirelessAction));
         OnPropertyChanged(nameof(StateText));
         OnPropertyChanged(nameof(StateForeground));
         OnPropertyChanged(nameof(StateBackground));

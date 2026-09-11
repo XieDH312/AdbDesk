@@ -5,5 +5,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AdbDesk.Core.Tests/AdbDesk.Core.Tests.csproj" />
+    <Project Path="tests/AdbDesk.Instance.Tests/AdbDesk.Instance.Tests.csproj" />
   </Folder>
 </Solution>

@@ -91,9 +91,9 @@ public partial class MainWindow : Window
             {
                 if (!serials.Contains(Devices[i].Serial))
                 {
-                    if (_mirrorService?.IsRunning(Devices[i].Serial) == true)
+                    if (_mirrorService?.IsRunning(Devices[i].Serial) == true || Devices[i].IsWirelessBusy)
                     {
-                        Devices[i].Update(new DeviceInfo(Devices[i].Serial, Devices[i].Model, "stale"));
+                        Devices[i].Update(Devices[i].Device with { State = "stale" });
                         Devices[i].IsSelected = false;
                     }
                     else
@@ -137,7 +137,7 @@ public partial class MainWindow : Window
         {
             foreach (var row in Devices)
             {
-                row.Update(new DeviceInfo(row.Serial, row.Model, "stale"));
+                row.Update(row.Device with { State = "stale" });
                 row.IsSelected = false;
             }
 
@@ -224,7 +224,7 @@ public partial class MainWindow : Window
             try
             {
                 _mirrorService?.Stop(row.Serial);
-                SetStatus($"正在停止 {row.Model} 的投屏", StatusKind.Working);
+                SetStatus($"正在停止 {row.DisplayName} 的投屏", StatusKind.Working);
             }
             catch (Exception ex)
             {
@@ -237,6 +237,121 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void WirelessButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isClosing || _adbService is null || (sender as FrameworkElement)?.DataContext is not DeviceRow row)
+        {
+            return;
+        }
+
+        if (!row.CanWirelessAction)
+        {
+            SetStatus("无线切换仅支持当前已授权的 USB 设备，请等待当前操作完成", StatusKind.Warning);
+            return;
+        }
+
+        if (HasActiveInstallTasks())
+        {
+            MessageBox.Show(
+                this,
+                "当前有安装任务正在排队或执行。请等待安装完成或取消任务后，再切换设备连接方式。",
+                "暂时无法切换无线连接",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var enabled = string.Equals((sender as Button)?.Tag?.ToString(), "enable", StringComparison.Ordinal);
+        var actionText = enabled ? "开启无线" : "关闭无线";
+        var explanation = enabled
+            ? "手机和电脑需要位于同一局域网（手机连接 Wi-Fi，电脑可以使用网线）。操作会重启手机的 ADB 服务并切换到 TCP/IP 5555 模式，当前投屏可能短暂断开。随后 AdbDesk 会尝试连接手机的局域网地址。"
+            : "操作会把手机 ADB 切回 USB 模式，当前投屏可能短暂断开。请保持 USB 数据线连接。";
+        var confirmation = MessageBox.Show(
+            this,
+            $"确定要为 {row.DisplayName} {actionText}吗？\n\n{explanation}",
+            $"确认{actionText}",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Information);
+        if (confirmation != MessageBoxResult.OK || _isClosing)
+        {
+            return;
+        }
+
+        if (!row.CanWirelessAction || HasActiveInstallTasks())
+        {
+            SetStatus("设备或安装任务状态已变化，请确认当前状态后重试无线切换", StatusKind.Warning);
+            return;
+        }
+
+        var target = row.Device;
+        row.IsWirelessBusy = true;
+        row.SetWirelessStatus(string.Empty);
+        try
+        {
+            var result = await _adbService.SetWirelessAsync(target, enabled, _lifetime.Token);
+            var outcome = FormatWirelessResult(result, enabled);
+            row.SetWirelessStatus(outcome.Summary);
+            SetStatus(outcome.Summary, outcome.IsWarning ? StatusKind.Warning : StatusKind.Ready);
+            if (!_isClosing)
+            {
+                MessageBox.Show(
+                    this,
+                    outcome.Detail,
+                    enabled ? "开启无线结果" : "关闭无线结果",
+                    MessageBoxButton.OK,
+                    outcome.IsWarning ? MessageBoxImage.Warning : MessageBoxImage.Information);
+            }
+
+            await RefreshDevicesAsync();
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            var detail = $"{actionText}失败：{ex.Message}";
+            row.SetWirelessStatus(detail);
+            SetStatus(detail, StatusKind.Error);
+            if (!_isClosing)
+            {
+                MessageBox.Show(this, detail, $"{actionText}失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        finally
+        {
+            row.IsWirelessBusy = false;
+        }
+    }
+
+    private static (string Summary, string Detail, bool IsWarning) FormatWirelessResult(WirelessResult result, bool enabled)
+    {
+        if (enabled && result.ModeEnabled && !result.Connected)
+        {
+            const string summary = "TCP/IP 模式已开启，但电脑尚未连接";
+            var endpoint = string.IsNullOrWhiteSpace(result.Endpoint) ? "未获取到可连接地址" : result.Endpoint;
+            return (
+                summary,
+                $"{summary}。\n\n目标：{endpoint}\n\n{result.Message}\n\n请保持 USB 连接，确认手机和电脑位于同一局域网后重试；也可以点击“关闭无线”恢复 USB 模式。",
+                true);
+        }
+
+        if (!result.Succeeded)
+        {
+            var summary = enabled ? "无线 ADB 切换尚未确认成功" : "恢复 USB 模式尚未确认成功";
+            var endpoint = string.IsNullOrWhiteSpace(result.Endpoint) ? string.Empty : $"\n\n目标：{result.Endpoint}";
+            var detail = string.IsNullOrWhiteSpace(result.Message) ? "设备未返回可确认的结果。" : result.Message;
+            return (
+                summary,
+                $"{summary}。{endpoint}\n\n{detail}\n\n请保持 USB 连接，刷新设备状态后重试。",
+                true);
+        }
+
+        var fallback = enabled ? "无线连接操作已完成" : "已请求恢复 USB 模式";
+        var summaryText = string.IsNullOrWhiteSpace(result.Message) ? fallback : result.Message;
+        var endpointText = string.IsNullOrWhiteSpace(result.Endpoint) ? string.Empty : $"\n\n连接地址：{result.Endpoint}";
+        return (summaryText, $"{summaryText}{endpointText}", false);
+    }
+
     private void StartMirror(DeviceRow row)
     {
         if (!_servicesReady || _mirrorService is null || !row.IsReady)
@@ -245,10 +360,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (row.IsWirelessBusy)
+        {
+            SetStatus("该设备正在切换无线连接，请等待操作完成后再启动投屏", StatusKind.Warning);
+            return;
+        }
+
         try
         {
             _mirrorService.Start(row.Device, GetMirrorOptions());
-            SetStatus($"正在启动 {row.Model} 的独立投屏窗口", StatusKind.Working);
+            SetStatus($"正在启动 {row.DisplayName} 的独立投屏窗口", StatusKind.Working);
         }
         catch (Exception ex)
         {
@@ -350,7 +471,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var targetList = string.Join(Environment.NewLine, targets.Select(target => $"• {target.Model}  ({target.Serial})"));
+        var targetList = string.Join(Environment.NewLine, targets.Select(target => $"• {target.DisplayName}  ({target.Serial})"));
         var answer = MessageBox.Show(
             this,
             $"将 {Path.GetFileName(apkPath)} 加入以下 {targets.Length} 台设备的安装队列：{Environment.NewLine}{Environment.NewLine}{targetList}",
@@ -363,6 +484,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (Devices.Any(device => device.IsWirelessBusy))
+        {
+            SetStatus("设备正在切换无线连接，暂时不能提交新的安装任务", StatusKind.Warning);
+            return;
+        }
+
         foreach (var target in targets)
         {
             EnqueueInstall(target, apkPath);
@@ -371,6 +498,12 @@ public partial class MainWindow : Window
 
     private void EnqueueInstall(DeviceRow target, string apkPath)
     {
+        if (_isClosing || Devices.Any(device => device.IsWirelessBusy))
+        {
+            SetStatus("设备正在切换无线连接，暂时不能提交新的安装任务", StatusKind.Warning);
+            return;
+        }
+
         if (_installQueue is null)
         {
             SetStatus("安装服务未就绪，请检查工具后重试", StatusKind.Error);
@@ -383,7 +516,7 @@ public partial class MainWindow : Window
             InstallTasks.Insert(0, new InstallRow(id, target.Serial, apkPath));
             TrimInstallHistory();
             UpdateInstallSummary();
-            SetStatus($"已将 {Path.GetFileName(apkPath)} 加入 {target.Model} 的安装队列", StatusKind.Ready);
+            SetStatus($"已将 {Path.GetFileName(apkPath)} 加入 {target.DisplayName} 的安装队列", StatusKind.Ready);
         }
         catch (Exception ex)
         {
@@ -469,6 +602,9 @@ public partial class MainWindow : Window
         EmptyInstallText.Visibility = InstallTasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private bool HasActiveInstallTasks() =>
+        InstallTasks.Any(task => ActiveInstallStates.Contains(task.Status));
+
     private void AppendMirrorLog(string serial, string message)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -495,7 +631,8 @@ public partial class MainWindow : Window
             "2. 首次连接时，请解锁手机并确认“允许 USB 调试”。显示“等待授权”时可重新插拔数据线。\n\n" +
             "3. 部分品牌安装 APK 时，还需在手机上确认“通过 USB 安装”或类似权限。\n\n" +
             "4. 投屏窗口由 scrcpy 独立打开。可直接把 APK 拖进该窗口；这是 scrcpy 原生安装，不进入主安装队列，结果会显示在投屏日志中，也不能从主界面取消。\n\n" +
-            "5. AdbDesk 只关闭自己启动的投屏和安装进程，不会停止系统 ADB 服务。",
+            "5. 开启无线要求手机与电脑位于同一局域网，电脑可以使用网线。切换连接方式会重启手机 ADB 服务，投屏可能短暂断开；请在结果确认前保持 USB 数据线连接。\n\n" +
+            "6. AdbDesk 只关闭自己启动的投屏和安装进程，不会停止系统 ADB 服务。",
             "连接与授权帮助",
             MessageBoxButton.OK,
             MessageBoxImage.Information);

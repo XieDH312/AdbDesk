@@ -1,25 +1,99 @@
 namespace AdbDesk.Core;
 
-public sealed class AdbService(ToolPaths paths)
+public sealed class AdbService
 {
+    private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DetailTimeout = TimeSpan.FromSeconds(6);
     private static readonly HashSet<string> KnownStates = new(StringComparer.Ordinal)
     {
         "device", "offline", "unauthorized", "recovery", "sideload", "bootloader", "host"
     };
 
+    private readonly ToolPaths _paths;
+    private readonly SemaphoreSlim _detailGate = new(4, 4);
+    private readonly DeviceDetailsCache _detailsCache;
+
+    public AdbService(ToolPaths paths) : this(paths, TimeSpan.FromSeconds(30)) { }
+
+    internal AdbService(ToolPaths paths, TimeSpan cacheLifetime)
+    {
+        _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _detailsCache = new DeviceDetailsCache(cacheLifetime);
+    }
+
     public async Task<IReadOnlyList<DeviceInfo>> GetDevicesAsync(CancellationToken cancellationToken = default)
     {
-        var result = await ProcessRunner.RunAsync(
-            paths.Adb,
-            ["devices", "-l"],
-            TimeSpan.FromSeconds(15),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (result.ExitCode != 0)
+        var devices = await GetRawDevicesAsync(cancellationToken).ConfigureAwait(false);
+        var enriched = await Task.WhenAll(devices.Select(device => EnrichAsync(device, cancellationToken))).ConfigureAwait(false);
+        return enriched;
+    }
+
+    public async Task<WirelessResult> SetWirelessAsync(
+        DeviceInfo device,
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var current = (await GetRawDevicesAsync(cancellationToken).ConfigureAwait(false))
+            .FirstOrDefault(candidate => candidate.Serial == device.Serial);
+        if (current is null)
+            return Failure(device.WirelessPort is not null, "设备已断开，未执行无线调试切换。");
+        if (!current.IsReady)
+            return Failure(device.WirelessPort is not null, $"设备当前状态为 {current.State}，请在手机上重新授权后再试。");
+
+        var devPath = await RunTargetedAsync(current.Serial, ["get-devpath"], DetailTimeout, cancellationToken).ConfigureAwait(false);
+        if (!devPath.Succeeded)
+            return Failure(device.WirelessPort is not null, $"无法确认 USB 连接：{devPath.Error}");
+        if (DeviceDetailsParser.ClassifyTransport(current.Serial, devPath.Output) != DeviceTransport.Usb)
+            return Failure(device.WirelessPort is not null, "当前设备不是已授权的物理 USB 连接，未执行切换。");
+
+        if (!enabled) return await DisableWirelessAsync(device, cancellationToken).ConfigureAwait(false);
+
+        var wifi = await RunTargetedAsync(
+            current.Serial,
+            ["shell", "ip", "-o", "-4", "addr", "show", "wlan0"],
+            DetailTimeout,
+            cancellationToken).ConfigureAwait(false);
+        var address = wifi.Succeeded ? DeviceDetailsParser.FindWifiIpv4(wifi.Output) : string.Empty;
+        if (address.Length == 0)
         {
-            var detail = FirstUsefulText(result.StandardError, result.StandardOutput);
-            throw new InvalidOperationException($"ADB 设备查询失败（退出代码 {result.ExitCode}）：{detail}");
+            var detail = wifi.Succeeded ? "手机 Wi-Fi 未取得可用 IPv4 地址。" : $"无法读取手机 Wi-Fi 地址：{wifi.Error}";
+            return Failure(device.WirelessPort is not null, $"{detail} 未开启 TCP 调试。");
         }
-        return ParseDevices(result.StandardOutput);
+
+        var tcpMode = await RunTargetedAsync(current.Serial, ["tcpip", "5555"], CommandTimeout, cancellationToken).ConfigureAwait(false);
+        _detailsCache.Clear();
+        if (!tcpMode.Succeeded || !Contains(tcpMode.Output, "restarting in TCP mode"))
+            return Failure(false, $"开启 TCP 调试失败：{tcpMode.ErrorOrOutput}");
+
+        var endpoint = $"{address}:5555";
+        var lastError = string.Empty;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250 * (attempt + 1)), cancellationToken).ConfigureAwait(false);
+            var connect = await RunAsync(["connect", endpoint], CommandTimeout, cancellationToken).ConfigureAwait(false);
+            var connectAccepted = connect.Succeeded &&
+                (Contains(connect.Output, $"connected to {endpoint}") || Contains(connect.Output, $"already connected to {endpoint}"));
+            if (!connectAccepted) lastError = connect.ErrorOrOutput;
+
+            var state = await RunTargetedAsync(endpoint, ["get-state"], DetailTimeout, cancellationToken).ConfigureAwait(false);
+            if (connectAccepted && state.Succeeded && string.Equals(state.Output.Trim(), "device", StringComparison.Ordinal))
+            {
+                _detailsCache.Clear();
+                return new WirelessResult(true, true, endpoint, $"已开启 TCP 调试并连接 {endpoint}。");
+            }
+            if (!state.Succeeded || state.Output.Trim() != "device") lastError = state.ErrorOrOutput;
+        }
+
+        _detailsCache.Clear();
+        return new WirelessResult(
+            true,
+            false,
+            endpoint,
+            $"TCP 调试已开启，但主机未连接到 {endpoint}。请保持 USB 连接后重试。{AppendDetail(lastError)}")
+        { Succeeded = false };
     }
 
     internal static IReadOnlyList<DeviceInfo> ParseDevices(string output)
@@ -49,7 +123,116 @@ public sealed class AdbService(ToolPaths paths)
         return devices;
     }
 
+    private async Task<IReadOnlyList<DeviceInfo>> GetRawDevicesAsync(CancellationToken cancellationToken)
+    {
+        var result = await ProcessRunner.RunAsync(
+            _paths.Adb,
+            ["devices", "-l"],
+            CommandTimeout,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"ADB 设备查询失败（退出代码 {result.ExitCode}）：{FirstUsefulText(result.StandardError, result.StandardOutput)}");
+        return ParseDevices(result.StandardOutput);
+    }
+
+    private async Task<DeviceInfo> EnrichAsync(DeviceInfo device, CancellationToken cancellationToken)
+    {
+        if (!device.IsReady) return device;
+        if (!_detailsCache.TryGet(device.Serial, out var details))
+        {
+            await _detailGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (!_detailsCache.TryGet(device.Serial, out details))
+                {
+                    details = await ProbeDetailsAsync(device, cancellationToken).ConfigureAwait(false);
+                    _detailsCache.Set(device.Serial, details);
+                }
+            }
+            finally
+            {
+                _detailGate.Release();
+            }
+        }
+
+        return device with
+        {
+            DeviceName = details.DeviceName,
+            Model = details.Model.Length == 0 ? device.Model : details.Model,
+            AndroidVersion = details.AndroidVersion,
+            Transport = details.Transport,
+            WirelessPort = details.WirelessPort,
+            DetailsError = details.Error,
+        };
+    }
+
+    private async Task<DeviceDetails> ProbeDetailsAsync(DeviceInfo device, CancellationToken cancellationToken)
+    {
+        var errors = new List<string>();
+        var devPath = await RunTargetedAsync(device.Serial, ["get-devpath"], DetailTimeout, cancellationToken).ConfigureAwait(false);
+        if (!devPath.Succeeded) errors.Add(devPath.Error);
+        var configuredName = await RunTargetedAsync(
+            device.Serial,
+            ["shell", "settings", "get", "global", "device_name"],
+            DetailTimeout,
+            cancellationToken).ConfigureAwait(false);
+        if (!configuredName.Succeeded) errors.Add(configuredName.Error);
+        var properties = await RunTargetedAsync(device.Serial, ["shell", "getprop"], DetailTimeout, cancellationToken).ConfigureAwait(false);
+        if (!properties.Succeeded) errors.Add(properties.Error);
+        return DeviceDetailsParser.Parse(device, configuredName.Output, properties.Output, devPath.Output, errors);
+    }
+
+    private async Task<WirelessResult> DisableWirelessAsync(DeviceInfo device, CancellationToken cancellationToken)
+    {
+        var usb = await RunTargetedAsync(device.Serial, ["usb"], CommandTimeout, cancellationToken).ConfigureAwait(false);
+        _detailsCache.Clear();
+        if (usb.Succeeded && Contains(usb.Output, "restarting in USB mode"))
+            return new WirelessResult(false, false, string.Empty, "已让设备端 ADB 返回 USB 模式，连接可能短暂中断。");
+        return Failure(device.WirelessPort is not null, $"返回 USB 模式失败：{usb.ErrorOrOutput}");
+    }
+
+    private Task<CommandResult> RunTargetedAsync(
+        string serial,
+        IReadOnlyList<string> command,
+        TimeSpan timeout,
+        CancellationToken cancellationToken) =>
+        RunAsync(["-s", serial, .. command], timeout, cancellationToken);
+
+    private async Task<CommandResult> RunAsync(
+        IReadOnlyList<string> arguments,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await ProcessRunner.RunAsync(
+                _paths.Adb,
+                arguments,
+                timeout,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            return new CommandResult(result.ExitCode == 0, result.StandardOutput.Trim(), result.StandardError.Trim());
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception exception)
+        {
+            return new CommandResult(false, string.Empty, exception.Message);
+        }
+    }
+
+    private static WirelessResult Failure(bool modeEnabled, string message) =>
+        new(modeEnabled, false, string.Empty, message) { Succeeded = false };
+
+    private static bool Contains(string value, string expected) =>
+        value.Contains(expected, StringComparison.OrdinalIgnoreCase);
+
+    private static string AppendDetail(string detail) => detail.Length == 0 ? string.Empty : $" 详情：{detail}";
+
     private static string FirstUsefulText(params string[] values) => values
         .Select(value => value.Trim())
         .FirstOrDefault(value => value.Length > 0) ?? "未知错误";
+
+    private sealed record CommandResult(bool Succeeded, string Output, string Error)
+    {
+        public string ErrorOrOutput => FirstUsefulText(Error, Output);
+    }
 }
