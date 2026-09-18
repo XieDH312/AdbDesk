@@ -18,7 +18,7 @@ public record WirelessResult(bool ModeEnabled, bool Connected, string Endpoint, 
     public bool Succeeded { get; init; } = true;
 }
 
-public record MirrorOptions(int MaxSize = 1280, int MaxFps = 30, bool Audio = false);
+public record MirrorOptions(int MaxSize = 1920, int MaxFps = 60, bool Audio = false);
 
 public record DisconnectResult(bool Disconnected, string Message);
 

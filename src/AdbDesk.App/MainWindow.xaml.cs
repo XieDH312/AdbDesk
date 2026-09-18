@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = this;
         InitializeNetworkStatus();
+        InitializeConnectionHistory();
         _deviceTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(2)
@@ -221,6 +222,7 @@ public partial class MainWindow : Window
 
         _quickConnecting = true;
         QuickConnectButton.IsEnabled = QuickConnectIp.IsEnabled = QuickConnectPort.IsEnabled = false;
+        ConnectionHistoryButton.IsEnabled = false;
         QuickConnectButton.Content = "连接中…";
         ShowQuickConnectResult($"正在连接 {ip}:{port}…", false);
         try
@@ -229,7 +231,11 @@ public partial class MainWindow : Window
             if (_isClosing) return;
             ShowQuickConnectResult(result.Message, !result.Connected);
             AppendMirrorLog(result.Endpoint, result.Message);
-            if (result.Connected) await RefreshDevicesAsync();
+            if (result.Connected)
+            {
+                RememberConnection(result.Endpoint, result.Message);
+                await RefreshDevicesAsync();
+            }
         }
         catch (OperationCanceledException) when (_isClosing) { }
         catch (Exception ex)
@@ -242,6 +248,7 @@ public partial class MainWindow : Window
             if (!_isClosing)
             {
                 QuickConnectButton.IsEnabled = QuickConnectIp.IsEnabled = QuickConnectPort.IsEnabled = true;
+                ConnectionHistoryButton.IsEnabled = true;
                 QuickConnectButton.Content = "连接";
             }
         }
@@ -550,10 +557,11 @@ public partial class MainWindow : Window
 
     private MirrorOptions GetMirrorOptions()
     {
-        var tag = (QualityComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "1280,30";
+        var defaults = new MirrorOptions();
+        var tag = (QualityComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? string.Empty;
         var values = tag.Split(',');
-        var maxSize = int.TryParse(values.ElementAtOrDefault(0), out var size) ? size : 1280;
-        var maxFps = int.TryParse(values.ElementAtOrDefault(1), out var fps) ? fps : 30;
+        var maxSize = int.TryParse(values.ElementAtOrDefault(0), out var size) && size > 0 ? size : defaults.MaxSize;
+        var maxFps = int.TryParse(values.ElementAtOrDefault(1), out var fps) && fps > 0 ? fps : defaults.MaxFps;
         return new MirrorOptions(maxSize, maxFps, AudioCheckBox.IsChecked == true);
     }
 

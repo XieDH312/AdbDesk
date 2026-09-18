@@ -8,6 +8,10 @@
         Closing="Window_Closing"
         Loaded="Window_Loaded">
     <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ConnectionHistoryStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
         <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="17" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -28,6 +32,7 @@
             <Setter Property="FontSize" Value="12" />
         </Style>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid Background="{StaticResource CanvasBrush}">
@@ -57,6 +62,9 @@
                                  VerticalContentAlignment="Center" MaxLength="15"
                                  InputMethod.IsInputMethodEnabled="False" KeyDown="QuickConnectInput_KeyDown"
                                  AutomationProperties.Name="手机 IP 地址" ToolTip="手机 IPv4 地址，例如 192.168.1.100；这里只填 IP" />
+                        <Button x:Name="ConnectionHistoryButton" Content="▾" Width="24" Padding="0" Margin="3,0,0,0"
+                                Click="ConnectionHistoryButton_Click" ToolTip="最近成功连接的地址"
+                                AutomationProperties.Name="连接历史" />
                         <TextBlock Text=":" Margin="5,0" VerticalAlignment="Center" FontWeight="SemiBold" />
                         <TextBox x:Name="QuickConnectPort" Width="60" Height="36" Padding="8,0" Text="5555"
                                  VerticalContentAlignment="Center" MaxLength="5"
@@ -94,11 +102,13 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="投屏质量" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
-                        <ComboBox x:Name="QualityComboBox" Width="158" Margin="10,0,18,0" SelectedIndex="1"
-                                  ToolTip="最长边像素，重新打开投屏后生效">
+                        <ComboBox x:Name="QualityComboBox" Width="158" Margin="10,0,18,0" SelectedIndex="2"
+                                  ToolTip="分辨率为最长边像素上限，帧率为上限；重新打开投屏后生效">
                             <ComboBoxItem Content="流畅 · 1024 / 30 帧" Tag="1024,30" />
                             <ComboBoxItem Content="均衡 · 1280 / 30 帧" Tag="1280,30" />
                             <ComboBoxItem Content="清晰 · 1920 / 60 帧" Tag="1920,60" />
+                            <ComboBoxItem Content="超清 · 2560 / 60 帧" Tag="2560,60" />
+                            <ComboBoxItem Content="极清 · 3840 / 60 帧" Tag="3840,60" />
                         </ComboBox>
                     </StackPanel>
                     <CheckBox x:Name="AudioCheckBox" Grid.Column="1" Content="传输音频" VerticalAlignment="Center" Margin="0,0,20,0" />

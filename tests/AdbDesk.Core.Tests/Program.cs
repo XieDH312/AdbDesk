@@ -12,6 +12,9 @@ if (Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL") == "1")
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("connection history persists recent unique endpoints and clears across restarts", ConnectionHistoryAsync),
+    ("connection history recovers corrupt data and rejects invalid new endpoints", ConnectionHistoryRecoveryAsync),
+    ("connection history removes only the chosen endpoint and persists the remaining order", ConnectionHistoryRemovalAsync),
     ("screenshot preserves PNG bytes, drains stderr and selects exactly one device", ScreenshotBytesAsync),
     ("screenshot rejects command errors empty output and non-PNG bytes", ScreenshotFailuresAsync),
     ("screenshot timeout and cancellation terminate their own child", ScreenshotCancellationAsync),
@@ -56,6 +59,66 @@ foreach (var test in tests)
 
 Console.WriteLine($"RESULT {tests.Length - failures.Count}/{tests.Length} passed");
 Environment.ExitCode = failures.Count == 0 ? 0 : 1;
+
+static Task ConnectionHistoryAsync()
+{
+    using var directory = new TempDirectory();
+    var path = Path.Combine(directory.Path, "settings", "connections.json");
+    var history = new ConnectionHistoryStore(path);
+    Equal(0, history.Load().Count, "first launch has no history");
+    for (var index = 1; index <= 12; index++) history.Remember($"192.0.2.{index}:5555");
+    var restored = new ConnectionHistoryStore(path).Load();
+    Equal(10, restored.Count, "bounded to ten recent endpoints");
+    Equal("192.0.2.12:5555", restored[0], "newest first");
+    Equal("192.0.2.3:5555", restored[^1], "oldest records evicted");
+    restored = history.Remember("192.000.2.5:05555");
+    Equal("192.0.2.5:5555", restored[0], "normalize and move duplicate to front");
+    Equal(1, restored.Count(endpoint => endpoint == "192.0.2.5:5555"), "no duplicate");
+    restored = history.Remember("192.0.2.5:41487");
+    True(restored.Contains("192.0.2.5:5555"), "same IP with another port retained separately");
+    Equal("192.0.2.5:41487", new ConnectionHistoryStore(path).Load()[0], "IP and port survive restart together");
+    history.Clear();
+    Equal(0, new ConnectionHistoryStore(path).Load().Count, "clear persists");
+    return Task.CompletedTask;
+}
+
+static Task ConnectionHistoryRemovalAsync()
+{
+    using var directory = new TempDirectory();
+    var path = Path.Combine(directory.Path, "connections.json");
+    var history = new ConnectionHistoryStore(path);
+    history.Remember("192.0.2.1:5555");
+    history.Remember("192.0.2.2:5555");
+    history.Remember("192.0.2.1:41487");
+    var remaining = history.Remove("192.000.2.1:05555");
+    True(remaining.SequenceEqual(new[] { "192.0.2.1:41487", "192.0.2.2:5555" }), "only exact IP and port removed, order preserved");
+    True(new ConnectionHistoryStore(path).Load().SequenceEqual(remaining), "deletion survives restart");
+    True(history.Remove("192.0.2.9:5555").SequenceEqual(remaining), "missing entry does not delete others");
+    Throws<ArgumentException>(() => history.Remove("bad address"));
+    True(history.Load().SequenceEqual(remaining), "invalid deletion leaves data intact");
+    history.Remove("192.0.2.1:41487");
+    history.Remove("192.0.2.2:5555");
+    Equal(0, new ConnectionHistoryStore(path).Load().Count, "last deletion persists empty list");
+    Equal("192.0.2.1:5555", history.Remember("192.0.2.1:5555").Single(), "future successful connection may record address again");
+    return Task.CompletedTask;
+}
+
+static Task ConnectionHistoryRecoveryAsync()
+{
+    using var directory = new TempDirectory();
+    var path = Path.Combine(directory.Path, "connections.json");
+    var history = new ConnectionHistoryStore(path);
+    File.WriteAllText(path, "broken JSON");
+    Equal(0, history.Load().Count, "corrupt file does not block startup");
+    history.Remember("192.0.2.1:5555");
+    Throws<ArgumentException>(() => history.Remember("192.0.2.1:99999"));
+    Equal("192.0.2.1:5555", history.Load().Single(), "invalid input does not overwrite history");
+    File.WriteAllText(path, "[null,\"bad\",\"192.0.2.7:5555\",\"192.000.2.7:05555\",\"192.0.2.8:41487\"]");
+    Equal(2, history.Load().Count, "ignore invalid entries and normalize duplicates on load");
+    File.WriteAllText(path, "null");
+    Equal(0, history.Load().Count, "null JSON tolerated");
+    return Task.CompletedTask;
+}
 
 static async Task ScreenshotBytesAsync()
 {
@@ -665,7 +728,7 @@ static async Task MirrorLifecycleAsync()
     var events = new ConcurrentQueue<MirrorEvent>();
     mirrors.Changed += events.Enqueue;
 
-    mirrors.Start(Ready("serial-A"), new MirrorOptions(1920, 60, true));
+    mirrors.Start(Ready("serial-A"), new MirrorOptions(Audio: true));
     mirrors.Start(Ready("serial-A"), new MirrorOptions());
     await TestWait.UntilAsync(() => mirrors.IsRunning("serial-A"), TimeSpan.FromSeconds(3));
     await TestWait.UntilAsync(() => events.Any(item => item.Message.Contains("mirror stdout", StringComparison.Ordinal)), TimeSpan.FromSeconds(3));
