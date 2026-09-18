@@ -17,6 +17,7 @@ public partial class PairingWindow : Window
     private const string CanceledMessage = "已停止等待；已提交给 ADB 的配对仍可能完成。可在手机无线调试中删除已配对电脑。";
     private readonly PairingService _service;
     private readonly Func<Task> _refreshDevices;
+    private readonly Func<string> _networkHint;
     private readonly DispatcherTimer _timer;
     private CancellationTokenSource? _operation;
     private QrPairingSession? _qrSession;
@@ -24,10 +25,11 @@ public partial class PairingWindow : Window
     private bool _loaded;
     private bool _closed;
 
-    public PairingWindow(PairingService service, PairingTab initialTab, Func<Task> refreshDevices)
+    public PairingWindow(PairingService service, PairingTab initialTab, Func<Task> refreshDevices, Func<string> networkHint)
     {
         _service = service;
         _refreshDevices = refreshDevices;
+        _networkHint = networkHint;
         InitializeComponent();
         PairingTabs.SelectedIndex = initialTab == PairingTab.Qr ? 0 : 1;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -248,7 +250,9 @@ public partial class PairingWindow : Window
 
     private void ShowStatus(string message, bool warning)
     {
-        ResultText.Text = message;
+        ResultText.Text = message.Contains("等待手机") || message.Contains("未发现") || message.Contains("二维码已过期")
+            ? message + "\n" + _networkHint()
+            : message;
         ResultText.Foreground = warning ? new SolidColorBrush(Color.FromRgb(180, 83, 9)) : new SolidColorBrush(Color.FromRgb(29, 78, 216));
     }
 

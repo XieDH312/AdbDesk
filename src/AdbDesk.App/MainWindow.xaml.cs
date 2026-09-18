@@ -25,11 +25,13 @@ public partial class MainWindow : Window
     private int _deviceRevision;
     private bool _servicesReady;
     private bool _isClosing;
+    private bool _quickConnecting;
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = this;
+        InitializeNetworkStatus();
         _deviceTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(2)
@@ -52,10 +54,11 @@ public partial class MainWindow : Window
         {
             DisposeServices();
             var paths = ToolPaths.Discover(AppContext.BaseDirectory);
-            _adbService = new AdbService(paths);
+            _screenshotService = new ScreenshotService(paths);
+            _adbService = new AdbService(paths) { ConfirmEndpointAsync = ConfirmNetworkEndpointAsync };
             _mirrorService = new MirrorService(paths);
             _installQueue = new InstallQueue(paths);
-            _pairingService = new PairingService(paths);
+            _pairingService = new PairingService(paths) { ConfirmEndpointAsync = ConfirmNetworkEndpointAsync };
             _mirrorService.Changed += MirrorService_Changed;
             _installQueue.Changed += InstallQueue_Changed;
             _servicesReady = true;
@@ -182,6 +185,78 @@ public partial class MainWindow : Window
 
     private void WirelessConnectionButton_Click(object sender, RoutedEventArgs e) => OpenPairingWindow(PairingTab.Qr);
 
+    private async void QuickConnectButton_Click(object sender, RoutedEventArgs e) => await QuickConnectAsync();
+
+    private async void QuickConnectInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter) return;
+        e.Handled = true;
+        await QuickConnectAsync();
+    }
+
+    private async Task QuickConnectAsync()
+    {
+        if (_isClosing || _quickConnecting) return;
+        if (!_servicesReady || _pairingService is not { } service)
+        {
+            ShowQuickConnectResult("连接服务未就绪，请先检查 ADB 工具。", true);
+            return;
+        }
+
+        var ip = QuickConnectIp.Text.Trim();
+        var port = QuickConnectPort.Text.Trim();
+        if (ip.Length == 0 || ip.Any(c => c != '.' && (c < '0' || c > '9')))
+        {
+            ShowQuickConnectResult("请填写手机 IPv4 地址，例如 192.168.1.100；无需输入冒号。", true);
+            QuickConnectIp.Focus();
+            return;
+        }
+        if (port.Length == 0 || port.Any(c => c < '0' || c > '9') ||
+            !int.TryParse(port, out var portNumber) || portNumber is < 1 or > 65535)
+        {
+            ShowQuickConnectResult("连接端口必须是 1–65535 的数字，无需输入冒号。", true);
+            QuickConnectPort.Focus();
+            return;
+        }
+
+        _quickConnecting = true;
+        QuickConnectButton.IsEnabled = QuickConnectIp.IsEnabled = QuickConnectPort.IsEnabled = false;
+        QuickConnectButton.Content = "连接中…";
+        ShowQuickConnectResult($"正在连接 {ip}:{port}…", false);
+        try
+        {
+            var result = await service.ConnectAsync($"{ip}:{port}", _lifetime.Token);
+            if (_isClosing) return;
+            ShowQuickConnectResult(result.Message, !result.Connected);
+            AppendMirrorLog(result.Endpoint, result.Message);
+            if (result.Connected) await RefreshDevicesAsync();
+        }
+        catch (OperationCanceledException) when (_isClosing) { }
+        catch (Exception ex)
+        {
+            if (!_isClosing) ShowQuickConnectResult($"连接失败：{ex.Message}", true);
+        }
+        finally
+        {
+            _quickConnecting = false;
+            if (!_isClosing)
+            {
+                QuickConnectButton.IsEnabled = QuickConnectIp.IsEnabled = QuickConnectPort.IsEnabled = true;
+                QuickConnectButton.Content = "连接";
+            }
+        }
+    }
+
+    private void ShowQuickConnectResult(string message, bool warning)
+    {
+        QuickConnectResult.Text = message;
+        QuickConnectResult.ToolTip = message;
+        QuickConnectResult.Foreground = warning
+            ? new SolidColorBrush(Color.FromRgb(180, 83, 9))
+            : (Brush)FindResource("MutedBrush");
+        QuickConnectResult.Visibility = Visibility.Visible;
+    }
+
     private void OpenPairingWindow(PairingTab initialTab)
     {
         if (_isClosing)
@@ -202,7 +277,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var window = new PairingWindow(_pairingService, initialTab, RefreshDevicesAsync)
+        var window = new PairingWindow(_pairingService, initialTab, RefreshDevicesAsync, GetNetworkHint)
         {
             Owner = this
         };
@@ -818,6 +893,7 @@ public partial class MainWindow : Window
         }
 
         _adbService = null;
+        _screenshotService = null;
         _servicesReady = false;
     }
 

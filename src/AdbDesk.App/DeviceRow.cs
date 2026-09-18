@@ -12,6 +12,7 @@ public sealed class DeviceRow : INotifyPropertyChanged
     private bool _isMirroring;
     private bool _isWirelessBusy;
     private bool _isDisconnecting;
+    private bool _isCapturing;
     private string _wirelessStatusMessage = string.Empty;
 
     public DeviceRow(DeviceInfo device)
@@ -49,6 +50,18 @@ public sealed class DeviceRow : INotifyPropertyChanged
     public string State => _device.State;
     public bool IsReady => _device.IsReady;
     public bool IsConnectionBusy => IsWirelessBusy || IsDisconnecting;
+    public bool CanCaptureAction => IsReady && !IsConnectionBusy && !IsCapturing;
+    public string CaptureActionText => IsCapturing ? "截图中…" : "截图";
+    public bool IsCapturing
+    {
+        get => _isCapturing;
+        set
+        {
+            if (!SetField(ref _isCapturing, value)) return;
+            OnPropertyChanged(nameof(CanCaptureAction));
+            OnPropertyChanged(nameof(CaptureActionText));
+        }
+    }
     public bool CanMirrorAction => (IsReady && !IsConnectionBusy) || IsMirroring;
     public bool ShowWirelessActions => IsReady && _device.Transport == DeviceTransport.Usb;
     public bool CanWirelessAction => ShowWirelessActions && !IsConnectionBusy;
@@ -108,6 +121,7 @@ public sealed class DeviceRow : INotifyPropertyChanged
                 OnPropertyChanged(nameof(WirelessBusyText));
                 OnPropertyChanged(nameof(HasWirelessStatus));
                 OnPropertyChanged(nameof(IsConnectionBusy));
+                OnPropertyChanged(nameof(CanCaptureAction));
                 OnPropertyChanged(nameof(CanDisconnectAction));
                 OnPropertyChanged(nameof(CanMirrorAction));
             }
@@ -121,6 +135,7 @@ public sealed class DeviceRow : INotifyPropertyChanged
         {
             if (!SetField(ref _isDisconnecting, value)) return;
             OnPropertyChanged(nameof(IsConnectionBusy));
+            OnPropertyChanged(nameof(CanCaptureAction));
             OnPropertyChanged(nameof(CanDisconnectAction));
             OnPropertyChanged(nameof(DisconnectActionText));
             OnPropertyChanged(nameof(CanMirrorAction));
@@ -163,6 +178,7 @@ public sealed class DeviceRow : INotifyPropertyChanged
         OnPropertyChanged(nameof(DetailsTooltip));
         OnPropertyChanged(nameof(State));
         OnPropertyChanged(nameof(IsReady));
+        OnPropertyChanged(nameof(CanCaptureAction));
         OnPropertyChanged(nameof(CanMirrorAction));
         OnPropertyChanged(nameof(ShowWirelessActions));
         OnPropertyChanged(nameof(CanWirelessAction));

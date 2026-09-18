@@ -9,6 +9,7 @@ public sealed class PairingService
     private readonly ToolPaths _paths;
     private readonly TimeSpan _discoveryInterval;
     private readonly TimeSpan _connectDiscoveryTimeout;
+    public Func<string, CancellationToken, Task<bool>>? ConfirmEndpointAsync { get; init; }
 
     public PairingService(ToolPaths paths) : this(paths, TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(10)) { }
 
@@ -54,7 +55,8 @@ public sealed class PairingService
             session.PairingSecret,
             connectionEndpoint: null,
             progress,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            session.ExpiresAt).ConfigureAwait(false);
     }
 
     public Task<PairingResult> PairWithCodeAsync(
@@ -101,6 +103,14 @@ public sealed class PairingService
             throw new ArgumentException("连接地址必须是有效的 IPv4:端口。", nameof(connectionEndpoint));
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (!await ConfirmAsync(endpoint, cancellationToken).ConfigureAwait(false))
+            return new PairingResult(false, false, endpoint, "已取消连接，未提交 ADB 连接请求。");
+        return await ConnectCoreAsync(endpoint, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<PairingResult> ConnectCoreAsync(string endpoint, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         var connect = await RunAsync(["connect", endpoint], CommandTimeout, cancellationToken).ConfigureAwait(false);
         var accepted = connect.Succeeded &&
             (Contains(connect.Output, $"connected to {endpoint}") || Contains(connect.Output, $"already connected to {endpoint}"));
@@ -118,8 +128,13 @@ public sealed class PairingService
         string secret,
         string? connectionEndpoint,
         IProgress<string>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DateTimeOffset? expiresAt = null)
     {
+        if (!await ConfirmAsync(pairingEndpoint, cancellationToken).ConfigureAwait(false))
+            return new PairingResult(false, false, pairingEndpoint, "已取消配对，未提交 ADB 配对请求。");
+        if (expiresAt is { } expiry && DateTimeOffset.UtcNow >= expiry)
+            return new PairingResult(false, false, pairingEndpoint, "二维码已过期，请刷新后重试。");
         Report(progress, "正在安全提交配对请求…");
         var pair = await RunAsync(
             ["pair", pairingEndpoint],
@@ -153,10 +168,22 @@ public sealed class PairingService
         }
 
         Report(progress, "正在连接并确认设备在线…");
-        var connection = await ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+        // The same host has already been approved before pairing. A newly discovered
+        // different address must be checked independently before connecting.
+        var connection = MdnsServices.GetHost(endpoint) == MdnsServices.GetHost(pairingEndpoint)
+            ? await ConnectCoreAsync(endpoint, cancellationToken).ConfigureAwait(false)
+            : await ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
         return connection.Connected
             ? new PairingResult(true, true, endpoint, $"配对成功，设备已连接：{endpoint}。")
             : new PairingResult(true, false, endpoint, $"配对成功，但设备尚未连接。{AppendDetail(connection.Message)}");
+    }
+
+    private async Task<bool> ConfirmAsync(string endpoint, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var accepted = ConfirmEndpointAsync is null || await ConfirmEndpointAsync(endpoint, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        return accepted;
     }
 
     private async Task<string?> FindServiceAsync(

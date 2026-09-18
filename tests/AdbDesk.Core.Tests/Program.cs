@@ -12,9 +12,15 @@ if (Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL") == "1")
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("screenshot preserves PNG bytes, drains stderr and selects exactly one device", ScreenshotBytesAsync),
+    ("screenshot rejects command errors empty output and non-PNG bytes", ScreenshotFailuresAsync),
+    ("screenshot timeout and cancellation terminate their own child", ScreenshotCancellationAsync),
+    ("LAN preflight compares actual masks and all physical adapters", LocalSubnetAsync),
+    ("declined or canceled endpoint confirmation never submits network mutations", NetworkPreflightAsync),
     ("wireless disconnect targets one transport and verifies removal without affecting other devices", WirelessDisconnectAsync),
     ("device enumeration parses states and routes through explicit adb arguments", DeviceEnumerationAsync),
     ("device enumeration enriches names versions and authoritative transports", DeviceDetailsAsync),
+    ("USB-only selector confirms Windows devices with unknown devpath and rechecks before mutation", UnknownUsbPathAsync),
     ("device detail probes are cached bounded and preserve partial devices", DeviceDetailCacheAsync),
     ("wireless enable requires a freshly authorized physical USB transport and Wi-Fi IPv4", WirelessPreconditionsAsync),
     ("wireless enable retries connect and verifies endpoint readiness", WirelessEnableAsync),
@@ -50,6 +56,108 @@ foreach (var test in tests)
 
 Console.WriteLine($"RESULT {tests.Length - failures.Count}/{tests.Length} passed");
 Environment.ExitCode = failures.Count == 0 ? 0 : 1;
+
+static async Task ScreenshotBytesAsync()
+{
+    using var fixture = new ToolFixture();
+    var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=");
+    fixture.SetResponse("capture-target", "screenshot", Convert.ToBase64String(png));
+    var actual = await new ScreenshotService(fixture.Paths).CaptureAsync("capture-target");
+    True(png.SequenceEqual(actual), "all binary bytes including CR LF and high bytes survive");
+    True(fixture.HasInvocation("-s", "capture-target", "exec-out", "screencap", "-p"), "exact serial and exec-out PNG arguments");
+    Equal(1, Directory.GetFiles(fixture.DirectoryPath, "call-*.txt").Length, "no mirror or other-device commands");
+}
+
+static async Task ScreenshotFailuresAsync()
+{
+    using var fixture = new ToolFixture();
+    var service = new ScreenshotService(fixture.Paths);
+    fixture.SetFailure("capture-error", "screenshot", "device offline");
+    await ThrowsAsync<InvalidOperationException>(() => service.CaptureAsync("capture-error"));
+    fixture.SetResponse("capture-empty", "screenshot", "");
+    await ThrowsAsync<InvalidDataException>(() => service.CaptureAsync("capture-empty"));
+    fixture.SetResponse("capture-text", "screenshot", Convert.ToBase64String(Encoding.UTF8.GetBytes("not a screenshot")));
+    await ThrowsAsync<InvalidDataException>(() => service.CaptureAsync("capture-text"));
+    await ThrowsAsync<InvalidDataException>(() => service.CaptureAsync("capture-oversize"));
+}
+
+static async Task ScreenshotCancellationAsync()
+{
+    using var fixture = new ToolFixture();
+    await ThrowsAsync<TimeoutException>(() => new ScreenshotService(fixture.Paths, TimeSpan.FromSeconds(2)).CaptureAsync("capture-hang"));
+    await AssertCaptureExitedAsync(fixture);
+    File.Delete(Path.Combine(fixture.DirectoryPath, "capture-pid.txt"));
+    using var cancellation = new CancellationTokenSource();
+    var pending = new ScreenshotService(fixture.Paths).CaptureAsync("capture-hang", cancellation.Token);
+    await TestWait.UntilAsync(() => File.Exists(Path.Combine(fixture.DirectoryPath, "capture-pid.txt")), TimeSpan.FromSeconds(5));
+    cancellation.Cancel();
+    await ThrowsAsync<OperationCanceledException>(() => pending);
+    await AssertCaptureExitedAsync(fixture);
+}
+
+static async Task AssertCaptureExitedAsync(ToolFixture fixture)
+{
+    var pid = int.Parse(await File.ReadAllTextAsync(Path.Combine(fixture.DirectoryPath, "capture-pid.txt")));
+    await TestWait.UntilAsync(() =>
+    {
+        try { using var process = Process.GetProcessById(pid); return process.HasExited; }
+        catch (ArgumentException) { return true; }
+    }, TimeSpan.FromSeconds(3));
+}
+
+static Task LocalSubnetAsync()
+{
+    var wifi = new LocalNetworkAddress("Wi-Fi", "192.168.101.230", "255.255.255.0", "192.168.101.1", "Wi-Fi", true);
+    Equal(SubnetMatch.SameSubnet, LocalNetwork.Compare("192.168.101.243:41487", [wifi]), "/24 match");
+    Equal(SubnetMatch.DifferentSubnet, LocalNetwork.Compare("192.168.110.42:5555", [wifi]), "/24 mismatch");
+    Equal(SubnetMatch.SameSubnet, LocalNetwork.Compare("192.168.110.42:5555", [wifi with { Mask = "255.255.0.0" }]), "/16 spans third octet");
+    Equal(SubnetMatch.SameSubnet, LocalNetwork.Compare("192.168.100.42:5555", [wifi with { Mask = "255.255.254.0" }]), "/23 matches adjacent range");
+    Equal(SubnetMatch.DifferentSubnet, LocalNetwork.Compare("192.168.102.42:5555", [wifi with { Mask = "255.255.254.0" }]), "/23 respects bit boundary");
+    Equal(SubnetMatch.SameSubnet, LocalNetwork.Compare("10.10.0.22:5555", [wifi, wifi with { Name = "Ethernet", Address = "10.10.0.2" }]), "secondary LAN can match");
+    Equal(SubnetMatch.DifferentSubnet, LocalNetwork.Compare("10.10.0.22:5555", [wifi, wifi with { Address = "10.10.0.2", IsLan = false }]), "virtual adapter does not impersonate LAN");
+    Equal(SubnetMatch.Unknown, LocalNetwork.Compare("192.168.101.243:5555", []), "no network stays unknown");
+    Equal(SubnetMatch.Unknown, LocalNetwork.Compare("192.168.101.243:5555", [wifi with { Mask = "255.0.255.0" }]), "invalid mask");
+    Equal(SubnetMatch.Unknown, LocalNetwork.Compare("192.168.101.243:5555", [wifi with { Address = "169.254.1.2" }]), "APIPA cannot confirm LAN");
+    Equal(SubnetMatch.Unknown, LocalNetwork.Compare("not-an-address", [wifi]), "invalid endpoint");
+    return Task.CompletedTask;
+}
+
+static async Task NetworkPreflightAsync()
+{
+    using var fixture = ReadyUsbWirelessFixture("guard-usb");
+    var checkedEndpoints = new List<string>();
+    Task<bool> Decline(string endpoint, CancellationToken token)
+    {
+        checkedEndpoints.Add(endpoint);
+        return Task.FromResult(false);
+    }
+    var pairing = new PairingService(fixture.Paths) { ConfirmEndpointAsync = Decline };
+    False((await pairing.ConnectAsync("192.0.2.42:5555")).Connected, "declined direct connection");
+    False((await pairing.PairWithCodeAsync("192.0.2.42:37001", "123456")).Paired, "declined code pairing");
+    var qr = PairingService.CreateQrSession();
+    fixture.SetMdnsBefore($"{qr.ServiceName} _adb-tls-pairing._tcp 192.0.2.42:37002");
+    False((await pairing.PairWithQrAsync(qr)).Paired, "QR checks discovered address before pairing");
+    Equal(0, fixture.CountCommand("pair"), "no pair command before approval");
+    Equal(0, fixture.CountCommand("connect"), "no connect command before approval");
+    True(checkedEndpoints.Contains("192.0.2.42:37002"), "exact QR endpoint checked");
+
+    fixture.SetResponse("guard-usb", "wifi", "7: wlan0 inet 192.0.2.42/24 scope global wlan0");
+    var adb = new AdbService(fixture.Paths) { ConfirmEndpointAsync = Decline };
+    False((await adb.SetWirelessAsync(new DeviceInfo("guard-usb", "Phone", "device"), true)).Succeeded, "declined USB enable");
+    Equal(0, fixture.CountCommand("tcpip"), "no mode switch before approval");
+
+    using var cancel = new CancellationTokenSource();
+    var canceling = new PairingService(fixture.Paths)
+    {
+        ConfirmEndpointAsync = (_, _) => { cancel.Cancel(); return Task.FromResult(true); }
+    };
+    await ThrowsAsync<OperationCanceledException>(() => canceling.ConnectAsync("192.0.2.42:5555", cancel.Token));
+    Equal(0, fixture.CountCommand("connect"), "cancellation after callback prevents command");
+
+    fixture.SetResponse("192.0.2.42:5555", "state", "device");
+    var accepted = new PairingService(fixture.Paths) { ConfirmEndpointAsync = (_, _) => Task.FromResult(true) };
+    True((await accepted.ConnectAsync("192.0.2.42:5555")).Connected, "user can still connect across subnet");
+}
 
 static async Task WirelessDisconnectAsync()
 {
@@ -161,6 +269,31 @@ static async Task DeviceDetailsAsync()
     var locked = devices.Single(device => device.Serial == "locked-one");
     Equal(DeviceTransport.Unknown, locked.Transport, "unauthorized transport is not guessed from serial shape");
     Equal(0, fixture.InvocationsForSerial("locked-one").Count, "unauthorized device has no probes");
+}
+
+static async Task UnknownUsbPathAsync()
+{
+    using var fixture = ReadyUsbWirelessFixture("windows-usb");
+    fixture.SetResponse("windows-usb", "devpath", "unknown");
+    fixture.SetResponse("usb-selector", "serial", "windows-usb");
+    var service = new AdbService(fixture.Paths);
+    var device = (await service.GetDevicesAsync()).Single();
+    Equal(DeviceTransport.Usb, device.Transport, "USB-only selector is authoritative despite unknown path");
+    True(fixture.HasInvocation("-d", "get-serialno"), "query must restrict transport to USB");
+
+    fixture.SetResponse("windows-usb", "wifi", "7: wlan0 inet 192.0.2.44/24 scope global wlan0");
+    fixture.SetResponse("192.0.2.44:5555", "state", "device");
+    True((await service.SetWirelessAsync(device, true)).Connected, "confirmed USB can enable wireless");
+    var calls = fixture.CountCommand("tcpip");
+    fixture.SetResponse("usb-selector", "serial", "another-usb");
+    False((await service.SetWirelessAsync(device, true)).Succeeded, "stale cached USB classification cannot authorize mutation");
+    Equal(calls, fixture.CountCommand("tcpip"), "different USB selection never switches target");
+
+    fixture.SetFailure("usb-selector", "serial", "error: more than one device/emulator");
+    var ambiguous = (await new AdbService(fixture.Paths).GetDevicesAsync()).Single();
+    Equal(DeviceTransport.Unknown, ambiguous.Transport, "ambiguous USB selection is not guessed");
+    False((await service.SetWirelessAsync(device, false)).Succeeded, "ambiguous transport cannot disable wireless");
+    Equal(0, fixture.CountCommand("usb"), "no USB mode mutation when ambiguous");
 }
 
 static async Task DeviceDetailCacheAsync()
@@ -815,6 +948,31 @@ static class FakeTool
     {
         var directory = Environment.GetEnvironmentVariable("ADBDESK_TEST_DIRECTORY")!;
         await File.WriteAllTextAsync(Path.Combine(directory, $"call-{DateTime.UtcNow.Ticks}-{Environment.ProcessId}.txt"), string.Join('|', arguments));
+        if (arguments is ["-s", var captureSerial, "exec-out", "screencap", "-p"])
+        {
+            if (captureSerial == "capture-hang")
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory, "capture-pid.txt"), Environment.ProcessId.ToString());
+                await Task.Delay(TimeSpan.FromMinutes(2));
+                return;
+            }
+            if (captureSerial == "capture-oversize")
+            {
+                await Console.OpenStandardOutput().WriteAsync(new byte[65 * 1024 * 1024]);
+                return;
+            }
+            var path = ResponsePath(directory, captureSerial, "screenshot");
+            if (File.Exists(path + ".failure"))
+            {
+                Console.Error.WriteLine(await File.ReadAllTextAsync(path + ".failure"));
+                Environment.ExitCode = 7;
+                return;
+            }
+            await Console.Error.WriteAsync(new string('x', 128 * 1024));
+            var bytes = Convert.FromBase64String(await File.ReadAllTextAsync(path));
+            await Console.OpenStandardOutput().WriteAsync(bytes);
+            return;
+        }
         if (arguments.SequenceEqual(["devices", "-l"]))
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "adb-invocation.txt"), string.Join('|', arguments));
@@ -883,6 +1041,11 @@ static class FakeTool
         if (arguments is ["-s", var serial, "get-devpath"])
         {
             await RespondAsync(directory, serial, "devpath");
+            return;
+        }
+        if (arguments is ["-d", "get-serialno"])
+        {
+            await RespondAsync(directory, "usb-selector", "serial");
             return;
         }
         if (arguments is ["-s", var propertySerial, "shell", "getprop"])

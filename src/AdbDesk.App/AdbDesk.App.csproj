@@ -7,10 +7,12 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <ApplicationIcon />
+    <ApplicationIcon>Assets\AdbDesk.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="Assets\AdbDesk.ico" />
+    <Resource Include="Assets\AdbDesk.png" />
     <ProjectReference Include="..\AdbDesk.Core\AdbDesk.Core.csproj" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>

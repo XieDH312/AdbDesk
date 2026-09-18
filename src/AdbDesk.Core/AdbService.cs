@@ -12,6 +12,7 @@ public sealed class AdbService
     private readonly ToolPaths _paths;
     private readonly SemaphoreSlim _detailGate = new(4, 4);
     private readonly DeviceDetailsCache _detailsCache;
+    public Func<string, CancellationToken, Task<bool>>? ConfirmEndpointAsync { get; init; }
 
     public AdbService(ToolPaths paths) : this(paths, TimeSpan.FromSeconds(30)) { }
 
@@ -72,10 +73,9 @@ public sealed class AdbService
             return Failure(device.WirelessPort is not null, $"设备当前状态为 {current.State}，请在手机上重新授权后再试。");
 
         var devPath = await RunTargetedAsync(current.Serial, ["get-devpath"], DetailTimeout, cancellationToken).ConfigureAwait(false);
-        if (!devPath.Succeeded)
-            return Failure(device.WirelessPort is not null, $"无法确认 USB 连接：{devPath.Error}");
-        if (DeviceDetailsParser.ClassifyTransport(current.Serial, devPath.Output) != DeviceTransport.Usb)
-            return Failure(device.WirelessPort is not null, "当前设备不是已授权的物理 USB 连接，未执行切换。");
+        var transport = await ResolveTransportAsync(current.Serial, devPath, cancellationToken).ConfigureAwait(false);
+        if (transport != DeviceTransport.Usb)
+            return Failure(device.WirelessPort is not null, "无法确认当前设备为 USB 连接，未执行切换。若插有多台手机，请暂时只保留目标手机的 USB 数据线后重试。");
 
         if (!enabled) return await DisableWirelessAsync(device, cancellationToken).ConfigureAwait(false);
 
@@ -91,12 +91,28 @@ public sealed class AdbService
             return Failure(device.WirelessPort is not null, $"{detail} 未开启 TCP 调试。");
         }
 
+        var endpoint = $"{address}:5555";
+        if (ConfirmEndpointAsync is { } confirm)
+        {
+            var accepted = await confirm(endpoint, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!accepted) return Failure(device.WirelessPort is not null, "已取消开启无线，未切换手机 TCP/IP 模式。");
+            // Confirmation can remain open while the user changes cables or authorizations.
+            var refreshed = (await GetRawDevicesAsync(cancellationToken).ConfigureAwait(false))
+                .FirstOrDefault(candidate => candidate.Serial == current.Serial);
+            if (refreshed?.IsReady != true) return Failure(false, "设备连接状态已变化，请重试。");
+            var refreshedPath = await RunTargetedAsync(current.Serial, ["get-devpath"], DetailTimeout, cancellationToken).ConfigureAwait(false);
+            if (await ResolveTransportAsync(current.Serial, refreshedPath, cancellationToken).ConfigureAwait(false) != DeviceTransport.Usb)
+                return Failure(false, "无法重新确认 USB 目标，未切换无线。");
+            var refreshedWifi = await RunTargetedAsync(current.Serial, ["shell", "ip", "-o", "-4", "addr", "show", "wlan0"], DetailTimeout, cancellationToken).ConfigureAwait(false);
+            if (!refreshedWifi.Succeeded || DeviceDetailsParser.FindWifiIpv4(refreshedWifi.Output) != address)
+                return Failure(false, "手机 Wi-Fi 地址已变化，请重新开启无线。");
+        }
         var tcpMode = await RunTargetedAsync(current.Serial, ["tcpip", "5555"], CommandTimeout, cancellationToken).ConfigureAwait(false);
         _detailsCache.Clear();
         if (!tcpMode.Succeeded || !Contains(tcpMode.Output, "restarting in TCP mode"))
             return Failure(false, $"开启 TCP 调试失败：{tcpMode.ErrorOrOutput}");
 
-        var endpoint = $"{address}:5555";
         var lastError = string.Empty;
         for (var attempt = 0; attempt < 3; attempt++)
         {
@@ -207,7 +223,24 @@ public sealed class AdbService
         if (!configuredName.Succeeded) errors.Add(configuredName.Error);
         var properties = await RunTargetedAsync(device.Serial, ["shell", "getprop"], DetailTimeout, cancellationToken).ConfigureAwait(false);
         if (!properties.Succeeded) errors.Add(properties.Error);
-        return DeviceDetailsParser.Parse(device, configuredName.Output, properties.Output, devPath.Output, errors);
+        var transport = await ResolveTransportAsync(device.Serial, devPath, cancellationToken).ConfigureAwait(false);
+        return DeviceDetailsParser.Parse(device, configuredName.Output, properties.Output, devPath.Output, errors)
+            with { Transport = transport };
+    }
+
+    private async Task<DeviceTransport> ResolveTransportAsync(
+        string serial, CommandResult devPath, CancellationToken cancellationToken)
+    {
+        var transport = DeviceDetailsParser.ClassifyTransport(serial, devPath.Succeeded ? devPath.Output : string.Empty);
+        if (transport != DeviceTransport.Unknown) return transport;
+
+        // Some Windows ADB backends omit the physical path. The USB-only selector
+        // confirms the transport without inferring it from a serial or phone property.
+        var usb = await RunAsync(["-d", "get-serialno"], DetailTimeout, cancellationToken).ConfigureAwait(false);
+        return usb.Succeeded && usb.Output.Length > 0 && usb.Output != "unknown" &&
+            string.Equals(usb.Output, serial, StringComparison.Ordinal)
+            ? DeviceTransport.Usb
+            : DeviceTransport.Unknown;
     }
 
     private async Task<WirelessResult> DisableWirelessAsync(DeviceInfo device, CancellationToken cancellationToken)
