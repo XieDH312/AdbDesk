@@ -2,6 +2,10 @@
 
 Windows 10/11 x64 安卓设备管理工具。本仓库用于发布便携包和更新说明。
 
+## 当前版本
+
+v1.0.0-beta.3：移除首页安装任务卡片，底部运行日志统一显示投屏和 APK 安装结果。beta.2 可在应用内更新，需开启“接收测试版本”。
+
 ## 下载
 
 打开 [Releases](https://github.com/XieDH312/AdbDesk/releases)，下载对应版本的 `AdbDesk-*-win-x64.zip`。
