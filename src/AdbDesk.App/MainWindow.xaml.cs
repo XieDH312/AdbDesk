@@ -25,7 +25,10 @@ public partial class MainWindow : Window
     private int _deviceRevision;
     private bool _servicesReady;
     private bool _isClosing;
+    private bool _closePending, _closeComplete;
     private bool _quickConnecting;
+    private bool _adbRestarting;
+    private ToolPaths? _toolPaths;
 
     public MainWindow()
     {
@@ -33,6 +36,8 @@ public partial class MainWindow : Window
         DataContext = this;
         InitializeNetworkStatus();
         InitializeConnectionHistory();
+        AdbConsole.RefreshRequested += async (_, _) => await RefreshDevicesAsync();
+        AppToolbox.RestartRequested = RestartAdbServerAsync;
         _deviceTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(2)
@@ -44,7 +49,11 @@ public partial class MainWindow : Window
     public ObservableCollection<InstallRow> InstallTasks { get; } = [];
     public ObservableCollection<string> MirrorLogs { get; } = [];
 
-    private async void Window_Loaded(object sender, RoutedEventArgs e) => await InitializeServicesAsync();
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        InitializeUpdates();
+        await InitializeServicesAsync();
+    }
 
     private async Task InitializeServicesAsync()
     {
@@ -53,8 +62,12 @@ public partial class MainWindow : Window
 
         try
         {
+            await AppToolbox.StopCapturesAsync();
             DisposeServices();
             var paths = ToolPaths.Discover(AppContext.BaseDirectory);
+            _toolPaths = paths;
+            AdbConsole.Configure(paths);
+            AppToolbox.Configure(paths);
             _screenshotService = new ScreenshotService(paths);
             _adbService = new AdbService(paths) { ConfirmEndpointAsync = ConfirmNetworkEndpointAsync };
             _mirrorService = new MirrorService(paths);
@@ -85,7 +98,7 @@ public partial class MainWindow : Window
 
     private async Task RefreshDevicesAsync()
     {
-        if (_adbService is null || Interlocked.Exchange(ref _refreshing, 1) != 0)
+        if (_adbRestarting || _adbService is null || Interlocked.Exchange(ref _refreshing, 1) != 0)
         {
             return;
         }
@@ -136,6 +149,8 @@ public partial class MainWindow : Window
             }
 
             UpdateDeviceSummary();
+            AdbConsole.UpdateDevices(discovered);
+            AppToolbox.UpdateDevices(discovered);
             SetStatus(
                 Devices.Count == 0 ? "未发现设备；请连接 USB 并在手机上确认调试授权" : $"已发现 {Devices.Count} 台设备",
                 Devices.Count == 0 ? StatusKind.Neutral : StatusKind.Ready);
@@ -153,6 +168,8 @@ public partial class MainWindow : Window
             }
 
             UpdateDeviceSummary();
+            AdbConsole.UpdateDevices(Devices.Select(row => row.Device));
+            AppToolbox.UpdateDevices(Devices.Select(row => row.Device));
             SetStatus($"刷新设备失败：{ex.Message}", StatusKind.Error);
         }
         finally
@@ -180,7 +197,27 @@ public partial class MainWindow : Window
         EmptyDevicePanel.Visibility = Devices.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshDevicesAsync();
+    private async void RefreshButton_Click(object sender, RoutedEventArgs e)
+    {
+        _adbService?.InvalidateNetworkCache();
+        await RefreshDevicesAsync();
+    }
+
+    private async void DeviceWifiIp_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isClosing || _adbService is null || (sender as FrameworkElement)?.DataContext is not DeviceRow { IsReady: true } row) return;
+        try
+        {
+            var network = await _adbService.GetNetworkAsync(row.Device, _lifetime.Token);
+            if (_isClosing || !Devices.Contains(row)) return;
+            row.Update(row.Device with { Network = network });
+            if (network.WifiAddress.Length == 0) { SetStatus("未取得手机 Wi-Fi IP；请检查 Wi-Fi 或 USB 授权。VPN 地址不会作为备用。", StatusKind.Warning); return; }
+            Clipboard.SetText(network.WifiAddress);
+            SetStatus($"已复制 {row.DisplayName} 的 Wi-Fi IP：{network.WifiAddress}", StatusKind.Ready);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { SetStatus($"读取／复制手机 Wi-Fi IP 失败：{ex.Message}", StatusKind.Warning); }
+    }
 
     private async void RetryButton_Click(object sender, RoutedEventArgs e) => await InitializeServicesAsync();
 
@@ -284,7 +321,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        var window = new PairingWindow(_pairingService, initialTab, RefreshDevicesAsync, GetNetworkHint)
+        var window = new PairingWindow(_pairingService, initialTab, RefreshDevicesAsync, GetNetworkHint,
+            () => Devices.Where(row => row.IsReady && row.Device.Transport == DeviceTransport.Usb)
+                .SelectMany(row => row.Device.Network.WifiAddresses.Select(address => address.Address)).Distinct().ToArray())
         {
             Owner = this
         };
@@ -317,7 +356,7 @@ public partial class MainWindow : Window
 
     private void StopSelectedButton_Click(object sender, RoutedEventArgs e)
     {
-        var targets = Devices.Where(device => device.IsSelected && device.IsMirroring).ToArray();
+        var targets = Devices.Where(device => device.IsSelected && (device.IsMirroring || device.IsMirrorStarting)).ToArray();
         if (targets.Length == 0)
         {
             SetStatus("所选设备当前没有正在运行的投屏", StatusKind.Warning);
@@ -328,7 +367,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                _mirrorService?.Stop(target.Serial);
+                StopMirror(target);
             }
             catch (Exception ex)
             {
@@ -336,7 +375,7 @@ public partial class MainWindow : Window
             }
         }
 
-        SetStatus($"正在停止 {targets.Length} 个投屏", StatusKind.Working);
+        SetStatus($"正在停止 {targets.Length} 个投屏或启动任务", StatusKind.Working);
     }
 
     private void MirrorButton_Click(object sender, RoutedEventArgs e)
@@ -346,12 +385,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (row.IsMirroring)
+        if (row.IsMirroring || row.IsMirrorStarting)
         {
             try
             {
-                _mirrorService?.Stop(row.Serial);
-                SetStatus($"正在停止 {row.DisplayName} 的投屏", StatusKind.Working);
+                var starting = row.IsMirrorStarting;
+                StopMirror(row);
+                SetStatus(starting ? $"已取消 {row.DisplayName} 的投屏启动" : $"正在停止 {row.DisplayName} 的投屏", StatusKind.Working);
             }
             catch (Exception ex)
             {
@@ -529,9 +569,9 @@ public partial class MainWindow : Window
         return (summaryText, $"{summaryText}{endpointText}", false);
     }
 
-    private void StartMirror(DeviceRow row)
+    private async void StartMirror(DeviceRow row)
     {
-        if (!_servicesReady || _mirrorService is null || !row.IsReady)
+        if (_isClosing || !_servicesReady || _mirrorService is not { } mirrors || !row.IsReady)
         {
             SetStatus("投屏服务未就绪，或设备尚未授权", StatusKind.Warning);
             return;
@@ -543,15 +583,58 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_mirrorStarting.ContainsKey(row.Serial) || mirrors.IsRunning(row.Serial)) return;
+        using var source = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var device = row.Device;
+        _mirrorStarting.Add(row.Serial, source);
+        row.IsMirrorStarting = true;
+        bool IsCurrentStart() => !_isClosing && _mirrorStarting.TryGetValue(row.Serial, out var pending) && ReferenceEquals(pending, source);
         try
         {
-            _mirrorService.Start(row.Device, GetMirrorOptions());
+            var options = GetMirrorOptions();
+            var cropToFill = (MirrorFitComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() == "crop";
+            if (cropToFill || options.FullScreen)
+            {
+                var display = GetMirrorTargetDisplay();
+                options = options with
+                {
+                    WindowX = display.Left + display.Width / 8,
+                    WindowY = display.Top + display.Height / 8,
+                    WindowWidth = display.Width * 3 / 4,
+                    WindowHeight = display.Height * 3 / 4
+                };
+                if (cropToFill)
+                {
+                    var adb = _adbService ?? throw new InvalidOperationException("ADB 服务未就绪。");
+                    var screenshots = _screenshotService ?? throw new InvalidOperationException("截图服务未就绪。");
+                    SetStatus($"正在读取 {row.DisplayName} 的屏幕尺寸并计算居中裁剪…", StatusKind.Working);
+                    var natural = await adb.GetDisplaySizeAsync(device, source.Token);
+                    var png = await screenshots.CaptureAsync(device.Serial, source.Token);
+                    var current = MirrorDisplayGeometry.ReadScreenshotSize(png);
+                    options = options with { Crop = MirrorDisplayGeometry.CropToFit(natural, current, display.Width, display.Height) };
+                }
+            }
+            source.Token.ThrowIfCancellationRequested();
+            if (_isClosing || !ReferenceEquals(_mirrorService, mirrors) || !Devices.Contains(row) || !row.IsReady ||
+                row.Device.TransportId != device.TransportId) return;
+            mirrors.Start(row.Device, options);
+            if (options.Crop is { } crop) AppendMirrorLog(row.Serial, $"保持比例裁剪：{crop.ToScrcpyArgument()}；改变手机方向后请停止并重开投屏。");
             SetStatus($"正在启动 {row.DisplayName} 的独立投屏窗口", StatusKind.Working);
         }
+        catch (OperationCanceledException) { if (IsCurrentStart()) SetStatus("已取消投屏启动", StatusKind.Warning); }
         catch (Exception ex)
         {
+            if (!IsCurrentStart()) return;
             SetStatus($"启动投屏失败：{ex.Message}", StatusKind.Error);
             AppendMirrorLog(row.Serial, ex.Message);
+        }
+        finally
+        {
+            if (_mirrorStarting.TryGetValue(row.Serial, out var pending) && ReferenceEquals(pending, source))
+            {
+                _mirrorStarting.Remove(row.Serial);
+                row.IsMirrorStarting = false;
+            }
         }
     }
 
@@ -562,7 +645,7 @@ public partial class MainWindow : Window
         var values = tag.Split(',');
         var maxSize = int.TryParse(values.ElementAtOrDefault(0), out var size) && size > 0 ? size : defaults.MaxSize;
         var maxFps = int.TryParse(values.ElementAtOrDefault(1), out var fps) && fps > 0 ? fps : defaults.MaxFps;
-        return new MirrorOptions(maxSize, maxFps, AudioCheckBox.IsChecked == true);
+        return new MirrorOptions(maxSize, maxFps, AudioCheckBox.IsChecked == true, FullScreen: MirrorFullScreenCheckBox.IsChecked == true);
     }
 
     private void MirrorService_Changed(MirrorEvent update)
@@ -719,6 +802,7 @@ public partial class MainWindow : Window
 
             TrimInstallHistory();
             UpdateInstallSummary();
+            AppendMirrorLog(update.Serial, $"[APK {update.Status}] {Path.GetFileName(update.ApkPath)}：{update.Detail}");
             if (update.Status is "失败" or "已取消")
             {
                 SetStatus($"{Path.GetFileName(update.ApkPath)}：{update.Detail}",
@@ -745,18 +829,21 @@ public partial class MainWindow : Window
         }
     }
 
-    private void InstallRow_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void CancelInstallMenu_Click(object sender, RoutedEventArgs e)
     {
-        if (e.ClickCount != 2 || (sender as FrameworkElement)?.DataContext is not InstallRow row)
+        var menu = new ContextMenu { PlacementTarget = CancelInstallMenuButton };
+        foreach (var row in InstallTasks.Where(task => task.CanCancel))
         {
-            return;
+            var item = new MenuItem
+            {
+                Header = $"{row.FileName} · {row.Serial} · {row.Status}",
+                DataContext = row,
+                ToolTip = "取消这台设备上的本次 APK 安装"
+            };
+            item.Click += CancelInstallButton_Click;
+            menu.Items.Add(item);
         }
-
-        e.Handled = true;
-        new InstallDetailWindow(row)
-        {
-            Owner = this
-        }.ShowDialog();
+        if (menu.Items.Count > 0) menu.IsOpen = true;
     }
 
     private void TrimInstallHistory()
@@ -776,8 +863,8 @@ public partial class MainWindow : Window
     private void UpdateInstallSummary()
     {
         var active = InstallTasks.Count(task => ActiveInstallStates.Contains(task.Status));
-        InstallCountText.Text = InstallTasks.Count == 0 ? "暂无任务" : $"{active} 个进行中 · 共 {InstallTasks.Count} 个";
-        EmptyInstallText.Visibility = InstallTasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        CancelInstallMenuButton.Visibility = active > 0 ? Visibility.Visible : Visibility.Collapsed;
+        CancelInstallMenuButton.Content = $"取消安装（{active}） ▾";
     }
 
     private bool HasActiveInstallTasks() =>
@@ -808,9 +895,9 @@ public partial class MainWindow : Window
             "1. 在手机上开启开发者选项和 USB 调试。\n\n" +
             "2. 首次连接时，请解锁手机并确认“允许 USB 调试”。显示“等待授权”时可重新插拔数据线。\n\n" +
             "3. 部分品牌安装 APK 时，还需在手机上确认“通过 USB 安装”或类似权限。\n\n" +
-            "4. 投屏窗口由 scrcpy 独立打开。可直接把 APK 拖进该窗口；这是 scrcpy 原生安装，不进入主安装队列，结果会显示在投屏日志中，也不能从主界面取消。\n\n" +
+            "4. 主界面 APK 安装结果显示在底部运行日志中，安装进行时可从“取消安装”菜单取消指定任务。投屏窗口由 scrcpy 独立打开，可直接拖入 APK；该安装结果也显示在运行日志中，但不能从主界面取消。\n\n" +
             "5. 开启无线要求手机与电脑位于同一局域网，电脑可以使用网线。切换连接方式会重启手机 ADB 服务，投屏可能短暂断开；请在结果确认前保持 USB 数据线连接。\n\n" +
-            "6. AdbDesk 只关闭自己启动的投屏和安装进程，不会停止系统 ADB 服务。",
+            "6. ADB 控制台支持常用命令、自定义命令、日志及历史。程序不会自动停止系统 ADB 服务；只有在控制台明确执行 kill-server 才会停止共享服务。",
             "连接与授权帮助",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -847,41 +934,73 @@ public partial class MainWindow : Window
         };
     }
 
-    private void Window_Closing(object? sender, CancelEventArgs e)
+    private async void Window_Closing(object? sender, CancelEventArgs e)
     {
-        if (_isClosing)
-        {
-            return;
-        }
+        if (_closeComplete) return;
+        e.Cancel = true;
+        if (_closePending) return;
 
         var activeInstalls = InstallTasks.Count(task => ActiveInstallStates.Contains(task.Status));
-        var activeMirrors = Devices.Count(device => device.IsMirroring);
+        var activeMirrors = Devices.Count(device => device.IsMirroring || device.IsMirrorStarting);
         if (activeInstalls + activeMirrors > 0)
         {
             var answer = MessageBox.Show(
                 this,
-                $"当前有 {activeMirrors} 个投屏和 {activeInstalls} 个安装任务。退出会停止本程序启动的这些进程，确定退出吗？",
+                $"当前有 {activeMirrors} 个投屏或启动任务和 {activeInstalls} 个安装任务。退出会停止本程序启动的这些进程，确定退出吗？",
                 "确认退出",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
             if (answer != MessageBoxResult.Yes)
             {
+                _pendingUpdate = null;
                 e.Cancel = true;
                 return;
             }
         }
 
+        _closePending = true;
         _isClosing = true;
+        ApplicationSurface.IsEnabled = false;
+        _deviceTimer.Stop();
+        AppToolbox.RefreshSuspended = true;
+        SetStatus("正在停止采集、保存日志并恢复手机代理…", StatusKind.Working);
+        try
+        {
+            await AppToolbox.StopCapturesAsync();
+            if (_pendingUpdate is not null) await StartUpdateHelperAsync(_pendingUpdate);
+        }
+        catch (Exception ex)
+        {
+            if (_pendingUpdate is not null) UpdateDiagnostics.Record("退出并交接更新", ex.ToString());
+            _pendingUpdate = null;
+            _closePending = _isClosing = false;
+            ApplicationSurface.IsEnabled = true;
+            AppToolbox.RefreshSuspended = false;
+            _deviceTimer.Start();
+            SetStatus("退出未完成：" + ex.Message, StatusKind.Error);
+            return;
+        }
+        AdbConsole.Shutdown();
+        AppToolbox.Shutdown();
         _deviceTimer.Stop();
         _pairingWindow?.Close();
         _pairingWindow = null;
         _lifetime.Cancel();
+        _updateService.Dispose();
         DisposeServices();
         _lifetime.Dispose();
+        _closeComplete = true;
+        // Closing can complete synchronously when no capture needs stopping.
+        // Leave the original Closing event before issuing the final close.
+        _ = Dispatcher.BeginInvoke(new Action(Close));
     }
 
     private void DisposeServices()
     {
+        foreach (var serial in _mirrorStarting.Keys.ToArray()) CancelMirrorStart(serial);
+        AdbConsole.Configure(null);
+        AppToolbox.Configure(null);
+        _toolPaths = null;
         _pairingWindow?.Close();
         _pairingWindow = null;
         _pairingService = null;

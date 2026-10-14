@@ -1,0 +1,81 @@
+<UserControl x:Class="AdbDesk.App.ToolboxPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             IsVisibleChanged="Page_VisibilityChanged"
+             FontFamily="Microsoft YaHei UI, Segoe UI" Foreground="{StaticResource InkBrush}">
+    <Grid Margin="0,12,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="12"/>
+            <RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Border Style="{StaticResource CardStyle}" Padding="16">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="运行中的应用" FontSize="18" FontWeight="SemiBold"/>
+                        <TextBlock Text="查看前台、最近任务和后台进程；按需刷新，不持续轮询。" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,5,0,0"/>
+                    </StackPanel>
+                    <Button x:Name="RestartButton" Grid.Column="1" Content="重启 ADB 服务" Click="Restart_Click"
+                            ToolTip="依次执行 adb kill-server 和 adb start-server，将影响电脑上所有 ADB 连接。"/>
+                </Grid>
+                <Grid Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <ComboBox x:Name="TargetCombo" DisplayMemberPath="Label" MinHeight="34" SelectionChanged="Target_Changed" AutomationProperties.Name="工具箱目标设备"/>
+                    <Button x:Name="LayoutButton" Grid.Column="1" Content="查看当前布局" Margin="8,0,0,0" Click="Layout_Click"/>
+                    <Button x:Name="RefreshButton" Grid.Column="2" Content="刷新应用" Margin="8,0,0,0" Click="Refresh_Click"/>
+                    <Button x:Name="CancelButton" Grid.Column="3" Content="停止当前操作" Margin="8,0,0,0" Click="Cancel_Click" IsEnabled="False"/>
+                </Grid>
+                <WrapPanel Margin="0,10,0,0">
+                    <Button x:Name="AppManagerButton" Content="应用管理" Click="AppManager_Click" Margin="0,0,8,0" ToolTip="管理当前 Android 用户的全部已安装应用"/>
+                    <Button x:Name="LogCaptureButton" Content="日志抓取" Click="LogCapture_Click" Margin="0,0,8,0"/>
+                    <Button x:Name="NetworkCaptureButton" Content="网络抓包" Click="NetworkCapture_Click" Margin="0,0,12,0"/>
+                    <TextBlock Text="日志持续保存 · 自有 Debug App 的 HTTP / HTTPS 调试" FontSize="12" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="14">
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <ComboBox x:Name="CategoryCombo" SelectedIndex="0" SelectionChanged="Filter_Changed" MinHeight="34" AutomationProperties.Name="应用状态分类">
+                        <ComboBoxItem Content="当前前台"/><ComboBoxItem Content="最近任务"/><ComboBoxItem Content="后台进程"/>
+                    </ComboBox>
+                    <TextBox x:Name="SearchInput" Grid.Column="1" Margin="10,0,0,0" Padding="10,6" TextChanged="Search_Changed" ToolTip="搜索包名、Activity 或进程 ID" AutomationProperties.Name="搜索包名 Activity 或进程 ID"/>
+                </Grid>
+                <TextBlock x:Name="SummaryText" Grid.Row="1" Text="选择在线设备后加载。应用以包名显示。" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,9,0,9"/>
+                <DataGrid x:Name="AppList" Grid.Row="2" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
+                          SelectionMode="Single" SelectionUnit="FullRow" HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeight="38"
+                          Background="White" BorderBrush="{StaticResource LineBrush}" SelectionChanged="App_Changed" EnableRowVirtualization="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="应用包名" Binding="{Binding PackageName}" Width="2*" MinWidth="150"/>
+                        <DataGridTextColumn Header="用户" Binding="{Binding UserId}" Width="48"/>
+                        <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="1.5*" MinWidth="110"/>
+                        <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="65"/>
+                        <DataGridTextColumn Header="任务 ID" Binding="{Binding TaskId}" Width="65"/>
+                        <DataGridTextColumn Header="Activity" Binding="{Binding Activity}" Width="2*" MinWidth="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <WrapPanel x:Name="ActionsPanel" Grid.Row="3" Margin="0,10,0,8" IsEnabled="False">
+                    <Button Content="复制包名" Click="CopyPackage_Click" Margin="0,0,6,5"/>
+                    <Button Content="复制 Activity" Click="CopyActivity_Click" Margin="0,0,6,5"/>
+                    <Button Content="应用详情" Click="Details_Click" Margin="0,0,6,5"/>
+                    <Button Content="导出 APK" Click="Export_Click" Margin="0,0,6,5" ToolTip="选择保存目录，导出 base 和全部 split APK；不包含应用数据。"/>
+                    <Button Content="查看日志" Click="Logs_Click" Margin="0,0,6,5" ToolTip="打开日志窗口，预填该应用与 Android 用户；点击开始后采集。"/>
+                    <Button Content="强制停止" Click="ForceStop_Click" Margin="0,0,6,5"/>
+                </WrapPanel>
+                <Expander x:Name="DetailExpander" Grid.Row="4" Header="查看详细输出" IsExpanded="False">
+                <TextBox x:Name="DetailOutput" Height="110" IsReadOnly="True" IsUndoEnabled="False" AcceptsReturn="True"
+                         FontFamily="Consolas, Microsoft YaHei UI" FontSize="12" Padding="8" BorderBrush="{StaticResource LineBrush}"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                         Text="最近任务保留卡片不代表应用仍在运行；缓存进程也不代表持续工作。&#10;部分系统可能隐藏任务或限制查询，无法识别时会显示提示。"/>
+                </Expander>
+            </Grid>
+        </Border>
+        <DockPanel Grid.Row="3" Margin="2,10,2,0">
+            <Button x:Name="OpenExportButton" DockPanel.Dock="Right" Content="打开导出目录" Click="OpenExport_Click" IsEnabled="False" Margin="10,0,0,0"/>
+            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Text="进入页面、切换设备或点击刷新时更新。" TextWrapping="Wrap" MaxHeight="48" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{StaticResource MutedBrush}"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

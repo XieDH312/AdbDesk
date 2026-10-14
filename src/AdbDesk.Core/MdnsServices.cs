@@ -24,6 +24,11 @@ internal static class MdnsServices
         return services;
     }
 
+    internal static IReadOnlyList<string> FindCandidates(string output, string name, string type, IReadOnlyList<LocalNetworkAddress> localAddresses) =>
+        Parse(output).Where(service => service.Name == name && service.Type == type)
+            .Select(service => service.Endpoint).Distinct(StringComparer.Ordinal)
+            .OrderByDescending(endpoint => LocalNetwork.Compare(endpoint, localAddresses) == SubnetMatch.SameSubnet).ToArray();
+
     public static bool TryNormalizeEndpoint(string value, out string endpoint)
     {
         endpoint = string.Empty;

@@ -2,6 +2,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -18,6 +19,7 @@ public partial class PairingWindow : Window
     private readonly PairingService _service;
     private readonly Func<Task> _refreshDevices;
     private readonly Func<string> _networkHint;
+    private readonly Func<IReadOnlyList<string>> _wifiAddresses;
     private readonly DispatcherTimer _timer;
     private CancellationTokenSource? _operation;
     private QrPairingSession? _qrSession;
@@ -25,15 +27,19 @@ public partial class PairingWindow : Window
     private bool _loaded;
     private bool _closed;
 
-    public PairingWindow(PairingService service, PairingTab initialTab, Func<Task> refreshDevices, Func<string> networkHint)
+    public PairingWindow(PairingService service, PairingTab initialTab, Func<Task> refreshDevices, Func<string> networkHint,
+        Func<IReadOnlyList<string>> wifiAddresses)
     {
         _service = service;
         _refreshDevices = refreshDevices;
         _networkHint = networkHint;
+        _wifiAddresses = wifiAddresses;
         InitializeComponent();
         PairingTabs.SelectedIndex = initialTab == PairingTab.Qr ? 0 : 1;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += Timer_Tick;
+        WifiIpInput.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler(WifiHostText_Changed));
+        RefreshWifiChoices();
     }
 
     public void SelectTab(PairingTab tab) => PairingTabs.SelectedIndex = tab == PairingTab.Qr ? 0 : 1;
@@ -113,7 +119,8 @@ public partial class PairingWindow : Window
             image.StreamSource = stream;
             image.EndInit();
             image.Freeze();
-            await RunOperationAsync((token, progress) => _service.PairWithQrAsync(session, progress, token), session, image);
+            var wifiHost = ReadWifiHostOverride();
+            await RunOperationAsync((token, progress) => _service.PairWithQrAsync(session, progress, token, wifiHost), session, image);
         }
         catch (Exception exception)
         {
@@ -128,14 +135,66 @@ public partial class PairingWindow : Window
         var code = PairingCode.Password;
         var connection = OptionalConnectionAddress.Text.Trim();
         PairingCode.Clear();
-        await RunOperationAsync((token, progress) => _service.PairWithCodeAsync(address, code, connection, progress, token));
+        await RunOperationAsync((token, progress) => _service.PairWithCodeAsync(address, code, connection, progress, token, ReadWifiHostOverride()));
     }
 
     private async void ManualConnect_Click(object sender, RoutedEventArgs e)
     {
         if (_operation is not null || _closed) return;
         var endpoint = ManualConnectionAddress.Text.Trim();
-        await RunOperationAsync((token, _) => _service.ConnectAsync(endpoint, token));
+        await RunOperationAsync((token, _) => _service.ConnectAsync(endpoint, token, ReadWifiHostOverride()));
+    }
+
+    private string? ReadWifiHostOverride()
+    {
+        if (UseWifiHost.IsChecked != true) return null;
+        var host = WifiIpInput.Text.Trim();
+        NetworkConnectionDiagnostics.ApplyWifiHost("192.0.2.1:1", host);
+        return host;
+    }
+
+    private void RefreshWifiChoices()
+    {
+        var text = WifiIpInput.Text;
+        WifiIpInput.ItemsSource = _wifiAddresses();
+        WifiIpInput.Text = text.Length > 0 ? text : WifiIpInput.Items.Cast<string>().FirstOrDefault() ?? "";
+    }
+
+    private void WifiIpInput_DropDownOpened(object? sender, EventArgs e) => RefreshWifiChoices();
+    private void WifiHostText_Changed(object sender, TextChangedEventArgs e) => WifiHostChanged();
+    private void WifiHostOption_Changed(object sender, RoutedEventArgs e) => WifiHostChanged();
+    private void WifiHostChanged()
+    {
+        if (!_loaded || _closed) return;
+        if (_operation is not null)
+        {
+            StopOperation();
+            ShowStatus(CanceledMessage + "\nWi-Fi IP 选项已改变，请刷新二维码或重新提交连接。", true);
+        }
+        WifiIpInput.IsEnabled = UseWifiHost.IsChecked == true;
+    }
+
+    private async void ProbePort_Click(object sender, RoutedEventArgs e)
+    {
+        if (_operation is not null || _closed) return;
+        StopOperation();
+        var id = _operationId;
+        using var source = new CancellationTokenSource();
+        _operation = source;
+        SetBusy(true);
+        try
+        {
+            var endpoint = NetworkConnectionDiagnostics.ApplyWifiHost(ManualConnectionAddress.Text.Trim(), ReadWifiHostOverride());
+            ShowStatus($"正在检测 TCP 端口：{endpoint}…", false);
+            var diagnostic = await NetworkConnectionDiagnostics.ProbeTcpAsync(endpoint, source.Token);
+            if (IsCurrent(id)) ShowStatus(diagnostic.Message, !diagnostic.Reachable);
+        }
+        catch (OperationCanceledException) { if (IsCurrent(id)) ShowStatus("已取消端口检测。", false); }
+        catch (Exception ex) { if (IsCurrent(id)) ShowStatus($"端口检测失败：{ex.Message}", true); }
+        finally
+        {
+            if (IsCurrent(id)) { _operation = null; SetBusy(false); }
+        }
     }
 
     private async Task RunOperationAsync(
@@ -242,6 +301,9 @@ public partial class PairingWindow : Window
         CancelButton.IsEnabled = busy;
         PairCodeButton.IsEnabled = !busy;
         ManualConnectButton.IsEnabled = !busy;
+        ProbePortButton.IsEnabled = !busy;
+        UseWifiHost.IsEnabled = !busy || _qrSession is not null;
+        WifiIpInput.IsEnabled = UseWifiHost.IsChecked == true && (!busy || _qrSession is not null);
         PairingAddress.IsEnabled = !busy;
         PairingCode.IsEnabled = !busy;
         OptionalConnectionAddress.IsEnabled = !busy;

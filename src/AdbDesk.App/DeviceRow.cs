@@ -10,6 +10,7 @@ public sealed class DeviceRow : INotifyPropertyChanged
     private DeviceInfo _device;
     private bool _isSelected;
     private bool _isMirroring;
+    private bool _isMirrorStarting;
     private bool _isWirelessBusy;
     private bool _isDisconnecting;
     private bool _isCapturing;
@@ -44,12 +45,19 @@ public sealed class DeviceRow : INotifyPropertyChanged
     };
 
     public string SerialAndTransport => $"{Serial}  ·  {TransportText}";
+    public bool HasNetworkInfo => IsReady && _device.Transport != DeviceTransport.Emulator;
+    public string NetworkText => $"Wi-Fi IP：{(_device.Network.WifiAddress.Length > 0 ? _device.Network.WifiAddress : "未获取")}" +
+        (_device.Network.VpnAddresses.Count > 0 ? $"  ·  VPN：{string.Join("、", _device.Network.VpnAddresses.Select(address => address.Address))}" : "");
+    public string NetworkTooltip => "点击重新读取并复制实际 Wi-Fi IP。网络信息最多每 10 秒刷新，连接前实时读取。\n" +
+        string.Join("\n", _device.Network.WifiAddresses.Select(address => $"Wi-Fi · {address.Interface} · {address.Address}/{address.PrefixLength}")) +
+        (_device.Network.VpnAddresses.Count == 0 ? "" : "\n" + string.Join("\n", _device.Network.VpnAddresses.Select(address => $"VPN · {address.Interface} · {address.Address}/{address.PrefixLength}")) + "\nVPN 网卡地址不能代替手机 Wi-Fi 地址。") +
+        (_device.Network.Error.Length == 0 ? "" : $"\n读取失败：{_device.Network.Error}");
     public string DetailsTooltip => string.IsNullOrWhiteSpace(_device.DetailsError)
         ? ModelAndAndroid
         : $"设备详情读取失败：{_device.DetailsError}";
     public string State => _device.State;
     public bool IsReady => _device.IsReady;
-    public bool IsConnectionBusy => IsWirelessBusy || IsDisconnecting;
+    public bool IsConnectionBusy => IsWirelessBusy || IsDisconnecting || IsMirrorStarting;
     public bool CanCaptureAction => IsReady && !IsConnectionBusy && !IsCapturing;
     public string CaptureActionText => IsCapturing ? "截图中…" : "截图";
     public bool IsCapturing
@@ -62,7 +70,7 @@ public sealed class DeviceRow : INotifyPropertyChanged
             OnPropertyChanged(nameof(CaptureActionText));
         }
     }
-    public bool CanMirrorAction => (IsReady && !IsConnectionBusy) || IsMirroring;
+    public bool CanMirrorAction => (IsReady && !IsConnectionBusy) || IsMirroring || IsMirrorStarting;
     public bool ShowWirelessActions => IsReady && _device.Transport == DeviceTransport.Usb;
     public bool CanWirelessAction => ShowWirelessActions && !IsConnectionBusy;
     public bool ShowDisconnectAction => _device.IsNetworkConnection;
@@ -107,6 +115,21 @@ public sealed class DeviceRow : INotifyPropertyChanged
                 OnPropertyChanged(nameof(MirrorActionText));
                 OnPropertyChanged(nameof(CanMirrorAction));
             }
+        }
+    }
+
+    public bool IsMirrorStarting
+    {
+        get => _isMirrorStarting;
+        set
+        {
+            if (!SetField(ref _isMirrorStarting, value)) return;
+            OnPropertyChanged(nameof(MirrorActionText));
+            OnPropertyChanged(nameof(IsConnectionBusy));
+            OnPropertyChanged(nameof(CanMirrorAction));
+            OnPropertyChanged(nameof(CanCaptureAction));
+            OnPropertyChanged(nameof(CanWirelessAction));
+            OnPropertyChanged(nameof(CanDisconnectAction));
         }
     }
 
@@ -162,7 +185,7 @@ public sealed class DeviceRow : INotifyPropertyChanged
 
     public bool HasWirelessStatus => !string.IsNullOrWhiteSpace(WirelessBusyText);
 
-    public string MirrorActionText => IsMirroring ? "停止投屏" : "开始投屏";
+    public string MirrorActionText => IsMirrorStarting ? "取消启动" : IsMirroring ? "停止投屏" : "开始投屏";
 
     public void SetWirelessStatus(string message) => WirelessStatusMessage = message;
 
@@ -175,6 +198,9 @@ public sealed class DeviceRow : INotifyPropertyChanged
         OnPropertyChanged(nameof(ModelAndAndroid));
         OnPropertyChanged(nameof(TransportText));
         OnPropertyChanged(nameof(SerialAndTransport));
+        OnPropertyChanged(nameof(HasNetworkInfo));
+        OnPropertyChanged(nameof(NetworkText));
+        OnPropertyChanged(nameof(NetworkTooltip));
         OnPropertyChanged(nameof(DetailsTooltip));
         OnPropertyChanged(nameof(State));
         OnPropertyChanged(nameof(IsReady));

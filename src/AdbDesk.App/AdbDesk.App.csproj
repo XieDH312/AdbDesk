@@ -3,6 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>AdbDesk</AssemblyName>
+    <Version>1.0.0-beta.8</Version>
+    <VersionCode>10008</VersionCode>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyMetadata Include="VersionCode" Value="$(VersionCode)" />
     <Resource Include="Assets\AdbDesk.ico" />
     <Resource Include="Assets\AdbDesk.png" />
     <ProjectReference Include="..\AdbDesk.Core\AdbDesk.Core.csproj" />
@@ -18,6 +21,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Assets\network_capture.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\adb-console.md" Link="docs\adb-console.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\updates.md" Link="docs\updates.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\app-management.md" Link="docs\app-management.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\network-capture.md" Link="docs\network-capture.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\licenses\mitmproxy-LICENSE.txt" Link="licenses\mitmproxy-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\tools\mitmproxy\mitmdump.exe;..\..\tools\mitmproxy\*.txt" Condition="Exists('..\..\tools\mitmproxy\mitmdump.exe')">
+      <Link>tools\mitmproxy\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
     <Content Include="..\..\licenses\QRCoder-LICENSE.txt">
       <Link>licenses\QRCoder-LICENSE.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -30,4 +44,12 @@
     </Content>
   </ItemGroup>
 
+  <Target Name="WritePortableInstallationMarker" AfterTargets="Publish">
+    <WriteLinesToFile File="$(PublishDir)AdbDesk.version.json"
+                      Lines="{&quot;versionCode&quot;:$(VersionCode),&quot;versionName&quot;:&quot;$(Version)&quot;}"
+                      Overwrite="true" Encoding="UTF-8" />
+    <WriteLinesToFile File="$(PublishDir)AdbDesk.installation.json"
+                      Lines="{&quot;schemaVersion&quot;:1,&quot;applicationId&quot;:&quot;AdbDesk&quot;,&quot;version&quot;:&quot;$(Version)&quot;}"
+                      Overwrite="true" Encoding="UTF-8" />
+  </Target>
 </Project>

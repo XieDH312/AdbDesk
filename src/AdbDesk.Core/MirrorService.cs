@@ -30,6 +30,9 @@ public sealed class MirrorService : IDisposable
         if (string.IsNullOrWhiteSpace(device.Serial)) throw new ArgumentException("设备标识不能为空。", nameof(device));
         if (options.MaxSize <= 0) throw new ArgumentOutOfRangeException(nameof(options), "最大尺寸必须大于零。");
         if (options.MaxFps <= 0) throw new ArgumentOutOfRangeException(nameof(options), "最大帧率必须大于零。");
+        options.Crop?.Validate();
+        if (options.WindowWidth is < 2 or > 32768 || options.WindowHeight is < 2 or > 32768)
+            throw new ArgumentOutOfRangeException(nameof(options), "窗口初始尺寸无效。");
 
         MirrorSession session;
         lock (_sync)
@@ -115,6 +118,12 @@ public sealed class MirrorService : IDisposable
             "--max-size", options.MaxSize.ToString(),
             "--max-fps", options.MaxFps.ToString());
         if (!options.Audio) startInfo.ArgumentList.Add("--no-audio");
+        if (options.FullScreen) startInfo.ArgumentList.Add("--fullscreen");
+        if (options.Crop is { } crop) AddArguments(startInfo, "--crop", crop.ToScrcpyArgument());
+        if (options.WindowX is int x) AddArguments(startInfo, "--window-x", x.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (options.WindowY is int y) AddArguments(startInfo, "--window-y", y.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (options.WindowWidth is int width) AddArguments(startInfo, "--window-width", width.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (options.WindowHeight is int height) AddArguments(startInfo, "--window-height", height.ToString(System.Globalization.CultureInfo.InvariantCulture));
         startInfo.Environment["ADB"] = Path.GetFullPath(_paths.Adb);
         return new Process { StartInfo = startInfo };
     }

@@ -4,4 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Data/console-presets.json" LogicalName="AdbDesk.Core.ConsolePresets.json" />
+  </ItemGroup>
 </Project>

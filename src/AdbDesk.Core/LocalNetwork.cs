@@ -20,22 +20,33 @@ public static class LocalNetwork
             {
                 var properties = adapter.GetIPProperties();
                 var gateway = properties.GatewayAddresses.FirstOrDefault(g => g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any))?.Address.ToString() ?? "";
-                var wifi = adapter.NetworkInterfaceType == NetworkInterfaceType.Wireless80211;
-                var ethernet = adapter.NetworkInterfaceType is NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet or NetworkInterfaceType.FastEthernetFx or NetworkInterfaceType.FastEthernetT;
-                var description = adapter.Name + " " + adapter.Description;
-                var virtualAdapter = new[] { "virtual", "vethernet", "hyper-v", "wsl", "vpn", "tun", "tap-", "wireguard", "tailscale", "mihomo", "clash", "vmware", "virtualbox" }
-                    .Any(marker => description.Contains(marker, StringComparison.OrdinalIgnoreCase));
+                var kind = ClassifyAdapter(adapter.Name, adapter.Description, adapter.NetworkInterfaceType);
                 foreach (var address in properties.UnicastAddresses)
                 {
                     if (address.Address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(address.Address) || address.Address.Equals(IPAddress.Any)) continue;
                     result.Add(new(adapter.Name, address.Address.ToString(), address.IPv4Mask.ToString(), gateway,
-                        wifi ? "Wi-Fi" : ethernet && !virtualAdapter ? "有线" : "其他网卡", (wifi || ethernet) && !virtualAdapter));
+                        kind.Kind, kind.IsLan));
                 }
             }
             catch (NetworkInformationException) { /* Adapter may disappear during a Wi-Fi switch. */ }
         }
         return result.OrderByDescending(a => a.IsLan).ThenByDescending(a => a.Gateway.Length > 0)
             .ThenBy(a => a.Name, StringComparer.Ordinal).ThenBy(a => a.Address, StringComparer.Ordinal).ToArray();
+    }
+
+    internal static (string Kind, bool IsLan) ClassifyAdapter(string name, string description, NetworkInterfaceType type)
+    {
+        // Wi-Fi Direct/Hosted Network adapters carry Windows mobile hotspot LAN
+        // traffic despite being virtual. Do not grant this exception to WSL/VPN.
+        var hotspot = description.Contains("Microsoft Wi-Fi Direct Virtual Adapter", StringComparison.OrdinalIgnoreCase) ||
+            description.Contains("Microsoft Hosted Network Virtual Adapter", StringComparison.OrdinalIgnoreCase);
+        if (hotspot) return ("电脑热点", true);
+        var wifi = type == NetworkInterfaceType.Wireless80211;
+        var ethernet = type is NetworkInterfaceType.Ethernet or NetworkInterfaceType.GigabitEthernet or NetworkInterfaceType.FastEthernetFx or NetworkInterfaceType.FastEthernetT;
+        var label = name + " " + description;
+        var virtualAdapter = new[] { "virtual", "vethernet", "hyper-v", "wsl", "vpn", "tun", "tap-", "wireguard", "tailscale", "mihomo", "clash", "vmware", "virtualbox" }
+            .Any(marker => label.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        return !virtualAdapter && (wifi || ethernet) ? (wifi ? "Wi-Fi" : "有线", true) : ("其他网卡", false);
     }
 
     public static SubnetMatch Compare(string endpoint, IReadOnlyList<LocalNetworkAddress> addresses)

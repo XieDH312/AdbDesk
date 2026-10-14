@@ -12,6 +12,7 @@ public sealed class AdbService
     private readonly ToolPaths _paths;
     private readonly SemaphoreSlim _detailGate = new(4, 4);
     private readonly DeviceDetailsCache _detailsCache;
+    private readonly DeviceNetworkCache _networkCache = new();
     public Func<string, CancellationToken, Task<bool>>? ConfirmEndpointAsync { get; init; }
 
     public AdbService(ToolPaths paths) : this(paths, TimeSpan.FromSeconds(30)) { }
@@ -27,6 +28,42 @@ public sealed class AdbService
         var devices = await GetRawDevicesAsync(cancellationToken).ConfigureAwait(false);
         var enriched = await Task.WhenAll(devices.Select(device => EnrichAsync(device, cancellationToken))).ConfigureAwait(false);
         return enriched;
+    }
+
+    public void InvalidateNetworkCache() => _networkCache.Clear();
+
+    public async Task<MirrorDisplaySize> GetDisplaySizeAsync(DeviceInfo device, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!device.IsReady || string.IsNullOrWhiteSpace(device.Serial)) throw new InvalidOperationException("请先连接并授权目标设备。");
+        var output = new System.Text.StringBuilder();
+        var error = new System.Text.StringBuilder();
+        var truncated = false;
+        // This runner cancels only its own adb client, preserving the shared server.
+        var exitCode = await new ConsoleCommandRunner(_paths).RunAsync(ConsoleCommand.Parse("shell wm size", device.Serial),
+            (text, isError) =>
+            {
+                var destination = isError ? error : output;
+                var remaining = 8192 - destination.Length;
+                if (text.Length > remaining) truncated = true;
+                if (remaining > 0) destination.Append(text.AsSpan(0, Math.Min(text.Length, remaining)));
+            }, DetailTimeout, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (exitCode != 0) throw new IOException($"无法读取手机分辨率：{(error.Length > 0 ? error : output)}");
+        if (truncated) throw new InvalidDataException("手机分辨率查询返回了过多数据。");
+        return MirrorDisplayGeometry.ParseNaturalSize(output.ToString());
+    }
+
+    public async Task<DeviceNetworkInfo> GetNetworkAsync(DeviceInfo device, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!device.IsReady || device.Transport == DeviceTransport.Emulator) return DeviceNetworkInfo.Empty;
+        var result = await RunTargetedAsync(device.Serial, ["shell", "ip", "-o", "-4", "addr", "show"], DetailTimeout, cancellationToken).ConfigureAwait(false);
+        var network = result.Succeeded ? DeviceNetworkInfo.Parse(result.Output) : DeviceNetworkInfo.Empty with { Error = result.ErrorOrOutput };
+        _networkCache.Set($"{device.Serial}\0{device.TransportId}", network);
+        return network;
     }
 
     public async Task<DisconnectResult> DisconnectWirelessAsync(DeviceInfo device, CancellationToken cancellationToken = default)
@@ -73,21 +110,19 @@ public sealed class AdbService
             return Failure(device.WirelessPort is not null, $"设备当前状态为 {current.State}，请在手机上重新授权后再试。");
 
         var devPath = await RunTargetedAsync(current.Serial, ["get-devpath"], DetailTimeout, cancellationToken).ConfigureAwait(false);
-        var transport = await ResolveTransportAsync(current.Serial, devPath, cancellationToken).ConfigureAwait(false);
+        var transport = await ResolveTransportAsync(current, devPath, cancellationToken).ConfigureAwait(false);
         if (transport != DeviceTransport.Usb)
             return Failure(device.WirelessPort is not null, "无法确认当前设备为 USB 连接，未执行切换。若插有多台手机，请暂时只保留目标手机的 USB 数据线后重试。");
 
         if (!enabled) return await DisableWirelessAsync(device, cancellationToken).ConfigureAwait(false);
 
-        var wifi = await RunTargetedAsync(
-            current.Serial,
-            ["shell", "ip", "-o", "-4", "addr", "show", "wlan0"],
-            DetailTimeout,
-            cancellationToken).ConfigureAwait(false);
-        var address = wifi.Succeeded ? DeviceDetailsParser.FindWifiIpv4(wifi.Output) : string.Empty;
+        var wifi = await GetNetworkAsync(current, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<LocalNetworkAddress> local;
+        try { local = LocalNetwork.ReadAddresses(); } catch { local = []; }
+        var address = wifi.SelectWifiAddress(local);
         if (address.Length == 0)
         {
-            var detail = wifi.Succeeded ? "手机 Wi-Fi 未取得可用 IPv4 地址。" : $"无法读取手机 Wi-Fi 地址：{wifi.Error}";
+            var detail = wifi.Error.Length == 0 ? "手机 Wi-Fi 未取得可用 IPv4 地址；VPN 虚拟网卡地址不能作为 Wi-Fi 地址。" : $"无法读取手机 Wi-Fi 地址：{wifi.Error}";
             return Failure(device.WirelessPort is not null, $"{detail} 未开启 TCP 调试。");
         }
 
@@ -102,14 +137,15 @@ public sealed class AdbService
                 .FirstOrDefault(candidate => candidate.Serial == current.Serial);
             if (refreshed?.IsReady != true) return Failure(false, "设备连接状态已变化，请重试。");
             var refreshedPath = await RunTargetedAsync(current.Serial, ["get-devpath"], DetailTimeout, cancellationToken).ConfigureAwait(false);
-            if (await ResolveTransportAsync(current.Serial, refreshedPath, cancellationToken).ConfigureAwait(false) != DeviceTransport.Usb)
+            if (await ResolveTransportAsync(refreshed, refreshedPath, cancellationToken).ConfigureAwait(false) != DeviceTransport.Usb)
                 return Failure(false, "无法重新确认 USB 目标，未切换无线。");
-            var refreshedWifi = await RunTargetedAsync(current.Serial, ["shell", "ip", "-o", "-4", "addr", "show", "wlan0"], DetailTimeout, cancellationToken).ConfigureAwait(false);
-            if (!refreshedWifi.Succeeded || DeviceDetailsParser.FindWifiIpv4(refreshedWifi.Output) != address)
+            var refreshedWifi = await GetNetworkAsync(refreshed, cancellationToken).ConfigureAwait(false);
+            if (refreshedWifi.Error.Length > 0 || !refreshedWifi.WifiAddresses.Any(candidate => candidate.Address == address))
                 return Failure(false, "手机 Wi-Fi 地址已变化，请重新开启无线。");
         }
         var tcpMode = await RunTargetedAsync(current.Serial, ["tcpip", "5555"], CommandTimeout, cancellationToken).ConfigureAwait(false);
         _detailsCache.Clear();
+        _networkCache.Clear();
         if (!tcpMode.Succeeded || !Contains(tcpMode.Output, "restarting in TCP mode"))
             return Failure(false, $"开启 TCP 调试失败：{tcpMode.ErrorOrOutput}");
 
@@ -136,7 +172,7 @@ public sealed class AdbService
             true,
             false,
             endpoint,
-            $"TCP 调试已开启，但主机未连接到 {endpoint}。请保持 USB 连接后重试。{AppendDetail(lastError)}")
+            $"TCP 调试已开启，但主机未连接到 {endpoint}。请保持 USB 连接后重试。{AppendDetail(lastError)}\n{NetworkConnectionDiagnostics.DescribeFailure(endpoint, lastError)}")
         { Succeeded = false };
     }
 
@@ -162,7 +198,13 @@ public sealed class AdbService
 
             var modelField = fields.FirstOrDefault(field => field.StartsWith("model:", StringComparison.Ordinal));
             var model = modelField is null ? string.Empty : modelField["model:".Length..].Replace('_', ' ');
-            devices.Add(new DeviceInfo(fields[0], model, state));
+            var path = fields.FirstOrDefault(field => field.StartsWith("usb:", StringComparison.Ordinal)) ?? "";
+            var id = fields.FirstOrDefault(field => field.StartsWith("transport_id:", StringComparison.Ordinal));
+            devices.Add(new DeviceInfo(fields[0], model, state)
+            {
+                Transport = DeviceDetailsParser.ClassifyTransport(fields[0], path.Length > 4 ? path : ""),
+                TransportId = id is not null && long.TryParse(id["transport_id:".Length..], out var number) && number > 0 ? number : null
+            });
         }
         return devices;
     }
@@ -176,21 +218,36 @@ public sealed class AdbService
             cancellationToken: cancellationToken).ConfigureAwait(false);
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"ADB 设备查询失败（退出代码 {result.ExitCode}）：{FirstUsefulText(result.StandardError, result.StandardOutput)}");
-        return ParseDevices(result.StandardOutput);
+        var devices = ParseDevices(result.StandardOutput);
+        if (!devices.Any(device => device.Transport == DeviceTransport.Unknown)) return devices;
+        var snapshot = await AdbTransportProbe.ReadAsync(DetailTimeout, cancellationToken).ConfigureAwait(false);
+        return devices.Select(device =>
+        {
+            // Known emulator/network serials keep their special UI semantics.
+            if (device.Transport != DeviceTransport.Unknown) return device;
+            var transport = snapshot.Classify(device);
+            return device with
+            {
+                Transport = transport,
+                DetailsError = transport == DeviceTransport.Unknown
+                    ? "无法确认连接类型：" + (snapshot.Error.Length > 0 ? snapshot.Error : "ADB 未返回匹配当前连接的信息。") : ""
+            };
+        }).ToArray();
     }
 
     private async Task<DeviceInfo> EnrichAsync(DeviceInfo device, CancellationToken cancellationToken)
     {
         if (!device.IsReady) return device;
-        if (!_detailsCache.TryGet(device.Serial, out var details))
+        var cacheKey = $"{device.Serial}\0{device.TransportId}";
+        if (!_detailsCache.TryGet(cacheKey, out var details))
         {
             await _detailGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                if (!_detailsCache.TryGet(device.Serial, out details))
+                if (!_detailsCache.TryGet(cacheKey, out details))
                 {
                     details = await ProbeDetailsAsync(device, cancellationToken).ConfigureAwait(false);
-                    _detailsCache.Set(device.Serial, details);
+                    _detailsCache.Set(cacheKey, details);
                 }
             }
             finally
@@ -199,14 +256,27 @@ public sealed class AdbService
             }
         }
 
+        var network = DeviceNetworkInfo.Empty;
+        if (device.Transport != DeviceTransport.Emulator)
+        {
+            await _detailGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (!_networkCache.TryGet(cacheKey, out network)) network = await GetNetworkAsync(device, cancellationToken).ConfigureAwait(false);
+            }
+            finally { _detailGate.Release(); }
+        }
         return device with
         {
             DeviceName = details.DeviceName,
             Model = details.Model.Length == 0 ? device.Model : details.Model,
             AndroidVersion = details.AndroidVersion,
-            Transport = details.Transport,
+            Transport = device.Transport != DeviceTransport.Unknown ? device.Transport : details.Transport,
             WirelessPort = details.WirelessPort,
-            DetailsError = details.Error,
+            Network = network,
+            DetailsError = string.Join("；", new[] { details.Error,
+                device.Transport == DeviceTransport.Unknown && details.Transport == DeviceTransport.Unknown ? device.DetailsError : "" }
+                .Where(error => error.Length > 0).Distinct()),
         };
     }
 
@@ -223,14 +293,20 @@ public sealed class AdbService
         if (!configuredName.Succeeded) errors.Add(configuredName.Error);
         var properties = await RunTargetedAsync(device.Serial, ["shell", "getprop"], DetailTimeout, cancellationToken).ConfigureAwait(false);
         if (!properties.Succeeded) errors.Add(properties.Error);
-        var transport = await ResolveTransportAsync(device.Serial, devPath, cancellationToken).ConfigureAwait(false);
+        // Live server metadata belongs to this refresh, never to the property cache.
+        // Only legacy path/USB-selector evidence is retained for old ADB backends.
+        var transport = device.Transport == DeviceTransport.Unknown
+            ? await ResolveTransportAsync(device, devPath, cancellationToken).ConfigureAwait(false)
+            : DeviceDetailsParser.ClassifyTransport(device.Serial, devPath.Succeeded ? devPath.Output : "");
         return DeviceDetailsParser.Parse(device, configuredName.Output, properties.Output, devPath.Output, errors)
             with { Transport = transport };
     }
 
     private async Task<DeviceTransport> ResolveTransportAsync(
-        string serial, CommandResult devPath, CancellationToken cancellationToken)
+        DeviceInfo device, CommandResult devPath, CancellationToken cancellationToken)
     {
+        if (device.Transport != DeviceTransport.Unknown) return device.Transport;
+        var serial = device.Serial;
         var transport = DeviceDetailsParser.ClassifyTransport(serial, devPath.Succeeded ? devPath.Output : string.Empty);
         if (transport != DeviceTransport.Unknown) return transport;
 
@@ -247,6 +323,7 @@ public sealed class AdbService
     {
         var usb = await RunTargetedAsync(device.Serial, ["usb"], CommandTimeout, cancellationToken).ConfigureAwait(false);
         _detailsCache.Clear();
+        _networkCache.Clear();
         if (usb.Succeeded && Contains(usb.Output, "restarting in USB mode"))
             return new WirelessResult(false, false, string.Empty, "已让设备端 ADB 返回 USB 模式，连接可能短暂中断。");
         return Failure(device.WirelessPort is not null, $"返回 USB 模式失败：{usb.ErrorOrOutput}");

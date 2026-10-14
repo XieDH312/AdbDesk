@@ -38,7 +38,7 @@ public sealed class ScreenshotService
         using var deadline = new CancellationTokenSource(_timeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         // Cancellation must terminate the child even while the WPF dispatcher is shutting down.
-        using var killOnCancellation = linked.Token.Register(() => ProcessRunner.TryKill(process));
+        using var killOnCancellation = linked.Token.Register(() => ProcessRunner.TryKill(process, entireProcessTree: false));
         var errorTask = ReadErrorAsync(process.StandardError, linked.Token);
         try
         {
@@ -65,7 +65,7 @@ public sealed class ScreenshotService
         catch (Exception ex)
         {
             var wasCanceled = linked.IsCancellationRequested;
-            ProcessRunner.TryKill(process);
+            ProcessRunner.TryKill(process, entireProcessTree: false);
             linked.Cancel();
             try { await errorTask.ConfigureAwait(false); } catch { }
             if (wasCanceled || ex is OperationCanceledException)

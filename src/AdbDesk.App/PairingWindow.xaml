@@ -15,6 +15,19 @@
         <StackPanel Margin="0,0,0,14">
             <TextBlock Text="无线连接设备" FontSize="21" FontWeight="Bold" />
             <TextBlock Text="适用于 Android 11 及以上。手机开启无线调试并连接 Wi-Fi，电脑与手机位于同一局域网。" TextWrapping="Wrap" Margin="0,7,0,0" Foreground="{StaticResource MutedBrush}" />
+            <Border Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,10,0,0">
+                <StackPanel>
+                    <DockPanel>
+                        <CheckBox x:Name="UseWifiHost" Content="使用手机 Wi-Fi IP" VerticalAlignment="Center" Margin="0,0,12,0"
+                                  Checked="WifiHostOption_Changed" Unchecked="WifiHostOption_Changed" />
+                        <ComboBox x:Name="WifiIpInput" IsEditable="True" IsEnabled="False" MinHeight="30" MinWidth="170"
+                                  DropDownOpened="WifiIpInput_DropDownOpened"
+                                  ToolTip="下拉列出 USB 手机的 Wi-Fi IP，也可填写 Wi-Fi 详情中的 IP；不要填写端口" />
+                    </DockPanel>
+                    <TextBlock Text="VPN 导致无线调试页显示错误 IP 时启用；只替换 IP，保留配对／连接端口。修改后请刷新二维码。"
+                               TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
         </StackPanel>
         <TabControl x:Name="PairingTabs" Grid.Row="1" SelectionChanged="PairingTabs_SelectionChanged">
             <TabItem Header="扫码连接" Padding="16,7">
@@ -54,9 +67,10 @@
                 <TextBlock Text="已配对但未连接？手动填写连接地址" FontWeight="SemiBold" />
                 <TextBlock Text="使用手机“无线调试”主页的 IP 地址和端口，例如 192.168.1.100:40567。" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,4,0,8" />
                 <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                     <TextBox x:Name="ManualConnectionAddress" MinHeight="34" Padding="8,5" />
                     <Button x:Name="ManualConnectButton" Grid.Column="1" Content="连接此地址" Click="ManualConnect_Click" Margin="8,0,0,0" />
+                    <Button x:Name="ProbePortButton" Grid.Column="2" Content="检测端口" Click="ProbePort_Click" Margin="8,0,0,0" />
                 </Grid>
             </StackPanel>
         </Border>

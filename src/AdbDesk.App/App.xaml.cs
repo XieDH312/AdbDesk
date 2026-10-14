@@ -13,6 +13,12 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Length > 0 && e.Args[0] == "--apply-update")
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            await ApplyUpdateAsync(e.Args);
+            return;
+        }
         // A stable identity across install directories/build versions, isolated per user/session.
         using var currentProcess = Process.GetCurrentProcess();
         var identity = $"AdbDesk.Main.v1:{Environment.UserDomainName}:{Environment.UserName}:{currentProcess.SessionId}";

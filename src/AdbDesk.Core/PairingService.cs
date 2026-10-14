@@ -32,10 +32,12 @@ public sealed class PairingService
     public async Task<PairingResult> PairWithQrAsync(
         QrPairingSession session,
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? wifiHostOverride = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         cancellationToken.ThrowIfCancellationRequested();
+        if (wifiHostOverride is not null) NetworkConnectionDiagnostics.ApplyWifiHost("192.0.2.1:1", wifiHostOverride);
         if (session.ExpiresAt <= DateTimeOffset.UtcNow)
             return new PairingResult(false, false, string.Empty, "二维码已过期，请刷新后重试。");
 
@@ -46,7 +48,7 @@ public sealed class PairingService
             session.ExpiresAt,
             cancellationToken).ConfigureAwait(false);
         if (pairingEndpoint is null)
-            return new PairingResult(false, false, string.Empty, "二维码已过期，未发现对应的手机配对服务。");
+            return new PairingResult(false, false, string.Empty, "二维码已过期，未发现对应的手机配对服务。指定 Wi-Fi IP 仍需发现配对端口；若 VPN 阻止发现，可改用配对码连接，填写实际 Wi-Fi IP 和手机弹窗中的配对端口。");
         if (session.ExpiresAt <= DateTimeOffset.UtcNow)
             return new PairingResult(false, false, string.Empty, "二维码已过期，未提交配对请求。");
 
@@ -56,7 +58,8 @@ public sealed class PairingService
             connectionEndpoint: null,
             progress,
             cancellationToken,
-            session.ExpiresAt).ConfigureAwait(false);
+            session.ExpiresAt,
+            wifiHostOverride).ConfigureAwait(false);
     }
 
     public Task<PairingResult> PairWithCodeAsync(
@@ -64,10 +67,12 @@ public sealed class PairingService
         string code,
         string? connectionEndpoint = null,
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? wifiHostOverride = null)
     {
         if (!MdnsServices.TryNormalizeEndpoint(pairingEndpoint, out var normalizedPairingEndpoint))
             throw new ArgumentException("配对地址必须是有效的 IPv4:端口。", nameof(pairingEndpoint));
+        normalizedPairingEndpoint = NetworkConnectionDiagnostics.ApplyWifiHost(normalizedPairingEndpoint, wifiHostOverride);
         if (code is null || code.Length != 6 || code.Any(character => character is < '0' or > '9'))
             throw new ArgumentException("配对码必须是六位数字。", nameof(code));
 
@@ -77,6 +82,7 @@ public sealed class PairingService
         {
             throw new ArgumentException("连接地址必须是有效的 IPv4:端口。", nameof(connectionEndpoint));
         }
+        if (normalizedConnectionEndpoint is not null) normalizedConnectionEndpoint = NetworkConnectionDiagnostics.ApplyWifiHost(normalizedConnectionEndpoint, wifiHostOverride);
         if (normalizedConnectionEndpoint is not null &&
             !string.Equals(
                 MdnsServices.GetHost(normalizedPairingEndpoint),
@@ -92,15 +98,18 @@ public sealed class PairingService
             code,
             normalizedConnectionEndpoint,
             progress,
-            cancellationToken);
+            cancellationToken,
+            wifiHostOverride: wifiHostOverride);
     }
 
     public async Task<PairingResult> ConnectAsync(
         string connectionEndpoint,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? wifiHostOverride = null)
     {
         if (!MdnsServices.TryNormalizeEndpoint(connectionEndpoint, out var endpoint))
             throw new ArgumentException("连接地址必须是有效的 IPv4:端口。", nameof(connectionEndpoint));
+        endpoint = NetworkConnectionDiagnostics.ApplyWifiHost(endpoint, wifiHostOverride);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (!await ConfirmAsync(endpoint, cancellationToken).ConfigureAwait(false))
@@ -115,7 +124,7 @@ public sealed class PairingService
         var accepted = connect.Succeeded &&
             (Contains(connect.Output, $"connected to {endpoint}") || Contains(connect.Output, $"already connected to {endpoint}"));
         if (!accepted)
-            return new PairingResult(false, false, endpoint, $"连接失败：{SafeDetail(connect.ErrorOrOutput)}");
+            return new PairingResult(false, false, endpoint, $"连接失败：{SafeDetail(connect.ErrorOrOutput)}\n{NetworkConnectionDiagnostics.DescribeFailure(endpoint, connect.ErrorOrOutput)}");
 
         var state = await RunAsync(["-s", endpoint, "get-state"], CommandTimeout, cancellationToken).ConfigureAwait(false);
         if (state.Succeeded && string.Equals(state.Output.Trim(), "device", StringComparison.Ordinal))
@@ -129,8 +138,11 @@ public sealed class PairingService
         string? connectionEndpoint,
         IProgress<string>? progress,
         CancellationToken cancellationToken,
-        DateTimeOffset? expiresAt = null)
+        DateTimeOffset? expiresAt = null,
+        string? wifiHostOverride = null)
     {
+        pairingEndpoint = NetworkConnectionDiagnostics.ApplyWifiHost(pairingEndpoint, wifiHostOverride);
+        if (wifiHostOverride is not null) Report(progress, $"使用指定手机 Wi-Fi IP；配对目标：{pairingEndpoint}");
         if (!await ConfirmAsync(pairingEndpoint, cancellationToken).ConfigureAwait(false))
             return new PairingResult(false, false, pairingEndpoint, "已取消配对，未提交 ADB 配对请求。");
         if (expiresAt is { } expiry && DateTimeOffset.UtcNow >= expiry)
@@ -144,7 +156,7 @@ public sealed class PairingService
         var combinedOutput = string.Join(Environment.NewLine, pair.Output, pair.Error);
         var match = PairSuccessRegex(pairingEndpoint).Match(combinedOutput);
         if (!pair.Succeeded || !match.Success)
-            return new PairingResult(false, false, string.Empty, $"配对失败：{SafeDetail(pair.ErrorOrOutput, secret)}");
+            return new PairingResult(false, false, string.Empty, $"配对失败：{SafeDetail(pair.ErrorOrOutput, secret)}\n{NetworkConnectionDiagnostics.DescribeFailure(pairingEndpoint, SafeDetail(pair.ErrorOrOutput, secret), pairing: true)}");
 
         var guid = match.Groups[1].Value;
         Report(progress, "配对成功，正在查找该设备的连接服务…");
@@ -164,8 +176,9 @@ public sealed class PairingService
                 true,
                 false,
                 string.Empty,
-                "配对成功，但未发现该设备的连接地址。请填写手机无线调试主页显示的 IP 地址和端口后连接。");
+                "配对成功，但未发现该设备的连接地址。请使用手机 Wi-Fi 详情中的实际 IP 和无线调试主页的连接端口；VPN 开启时主页可能显示虚拟网卡 IP。");
         }
+        endpoint = NetworkConnectionDiagnostics.ApplyWifiHost(endpoint, wifiHostOverride);
 
         Report(progress, "正在连接并确认设备在线…");
         // The same host has already been approved before pairing. A newly discovered
@@ -196,11 +209,12 @@ public sealed class PairingService
         {
             cancellationToken.ThrowIfCancellationRequested();
             var services = await RunAsync(["mdns", "services"], CommandTimeout, cancellationToken).ConfigureAwait(false);
-            if (services.Succeeded)
+            if (services.Succeeded && MdnsServices.Parse(services.Output).Any(service => service.Name == exactName && service.Type == exactType))
             {
-                var match = MdnsServices.Parse(services.Output)
-                    .FirstOrDefault(service => service.Name == exactName && service.Type == exactType);
-                if (match is not null) return match.Endpoint;
+                IReadOnlyList<LocalNetworkAddress> local;
+                try { local = LocalNetwork.ReadAddresses(); } catch { local = []; }
+                var candidates = MdnsServices.FindCandidates(services.Output, exactName, exactType, local);
+                if (candidates.Count > 0) return candidates[0];
             }
 
             var remaining = Smaller(deadline - DateTimeOffset.UtcNow, _discoveryInterval);

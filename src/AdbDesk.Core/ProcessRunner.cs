@@ -79,11 +79,11 @@ internal static class ProcessRunner
         }
     }
 
-    internal static void TryKill(Process process)
+    internal static void TryKill(Process process, bool entireProcessTree = true)
     {
         try
         {
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            if (!process.HasExited) process.Kill(entireProcessTree);
         }
         catch (InvalidOperationException) { }
         catch (System.ComponentModel.Win32Exception) { }

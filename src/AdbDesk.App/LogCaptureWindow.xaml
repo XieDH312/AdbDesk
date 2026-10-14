@@ -1,0 +1,64 @@
+<Window x:Class="AdbDesk.App.LogCaptureWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="日志采集" Icon="Assets/AdbDesk.ico" Width="1180" Height="790" MinWidth="880" MinHeight="600"
+        WindowStartupLocation="CenterOwner" Closing="Window_Closing">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,12">
+            <WrapPanel DockPanel.Dock="Right">
+                <Button x:Name="StartButton" Content="开始采集" Style="{StaticResource PrimaryButtonStyle}" Click="Start_Click" Margin="0,0,6,0"/>
+                <Button x:Name="StopButton" Content="停止" Click="Stop_Click" IsEnabled="False" Margin="0,0,6,0"/>
+                <Button x:Name="FolderButton" Content="打开采集目录" Click="OpenFolder_Click" IsEnabled="False"/>
+            </WrapPanel>
+            <StackPanel><TextBlock Text="日志采集" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock x:Name="DeviceText" Foreground="{StaticResource MutedBrush}" Margin="0,5,10,0" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </DockPanel>
+        <StackPanel x:Name="CaptureSettings" Grid.Row="1">
+            <WrapPanel VerticalAlignment="Center">
+                <TextBlock Text="采集范围" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox x:Name="ScopeInput" Width="140" SelectedIndex="0" SelectionChanged="Scope_Changed" Margin="0,0,12,0">
+                    <ComboBoxItem Content="全部设备日志"/><ComboBoxItem Content="指定应用（UID）"/>
+                </ComboBox>
+                <TextBlock Text="包名" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox x:Name="PackageInput" Width="250" Padding="7,5" IsEnabled="False" AutomationProperties.Name="应用包名"/>
+                <TextBlock Text="Android 用户" VerticalAlignment="Center" Margin="12,0,6,0"/>
+                <TextBox x:Name="UserInput" Width="55" Text="0" Padding="7,5" IsEnabled="False" AutomationProperties.Name="Android 用户编号"/>
+                <CheckBox x:Name="CrashInput" Content="仅 crash 缓冲区" VerticalAlignment="Center" Margin="14,0,0,0"/>
+            </WrapPanel>
+            <DockPanel Margin="0,10,0,0">
+                <TextBlock Text="保存到" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <Button DockPanel.Dock="Right" Content="选择目录…" Click="ChooseFolder_Click" Margin="8,0,0,0"/>
+                <TextBox x:Name="FolderInput" Padding="7,5" AutomationProperties.Name="日志保存父目录"/>
+            </DockPanel>
+        </StackPanel>
+        <Border Grid.Row="2" Background="#EAF2FF" CornerRadius="7" Padding="10,8" Margin="0,12,0,10">
+            <TextBlock FontSize="12" Foreground="#365B91" TextWrapping="Wrap"
+                       Text="开始后读取已有缓冲区及新日志，不清空手机日志。默认 main / system / crash；下方筛选仅影响预览。完整原始输出持续写入独立目录，每 20 MiB 分卷；预览仅保留最新 2,500 行 / 512K 字符。UID 筛选可跨应用重启，可能含共享 UID 的包，不含独立 UID 的隔离进程及系统代报信息。排查完整崩溃可选全部设备日志。"/>
+        </Border>
+        <WrapPanel Grid.Row="3" Margin="0,0,0,10">
+            <TextBlock Text="预览级别 ≥" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="LevelInput" Width="95" SelectedIndex="0" SelectionChanged="Filter_Changed" Margin="0,0,12,0">
+                <ComboBoxItem Content="V · 全部"/><ComboBoxItem Content="D · 调试"/><ComboBoxItem Content="I · 信息"/>
+                <ComboBoxItem Content="W · 警告"/><ComboBoxItem Content="E · 错误"/><ComboBoxItem Content="F · 致命"/>
+            </ComboBox>
+            <TextBlock Text="Tag" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <TextBox x:Name="TagInput" Width="145" Padding="7,5" TextChanged="Filter_Changed" AutomationProperties.Name="预览 Tag 筛选"/>
+            <TextBlock Text="关键词" VerticalAlignment="Center" Margin="12,0,6,0"/>
+            <TextBox x:Name="KeywordInput" Width="180" Padding="7,5" TextChanged="Filter_Changed" AutomationProperties.Name="预览关键词筛选"/>
+            <CheckBox x:Name="FollowInput" Content="滚动到底部" IsChecked="True" VerticalAlignment="Center" Margin="12,0,12,0"/>
+            <Button Content="导出当前预览…" Click="Export_Click"/>
+        </WrapPanel>
+        <TextBox x:Name="LogText" Grid.Row="4" IsReadOnly="True" FontFamily="Consolas" FontSize="12"
+                 Background="#111827" Foreground="#E5E7EB" Padding="10" TextWrapping="NoWrap" AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="日志预览"/>
+        <StackPanel Grid.Row="5" Margin="0,10,0,0">
+            <TextBlock x:Name="PreviewInfo" FontSize="11" Foreground="{StaticResource MutedBrush}" Text="等待采集。"/>
+            <TextBlock x:Name="StatusText" Text="选择保存目录和范围，点击“开始采集”。" TextWrapping="Wrap" Margin="0,5,0,0"/>
+        </StackPanel>
+    </Grid>
+</Window>

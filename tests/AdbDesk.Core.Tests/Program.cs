@@ -12,6 +12,62 @@ if (Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL") == "1")
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("mirror fill preserves aspect ratio and converts current orientation into natural crop coordinates", MirrorDisplayTests.GeometryAsync),
+    ("mirror fullscreen and crop arguments preserve device scope and cancel geometry reads", MirrorDisplayTests.ArgumentsAsync),
+    ("phone Wi-Fi addresses remain separate from VPN interfaces", DeviceNetworkTests.AddressesAsync),
+    ("Windows hotspot and same-device mDNS candidates match the LAN", DeviceNetworkTests.HotspotAsync),
+    ("wireless mode reads fresh physical Wi-Fi addresses rather than VPN", DeviceNetworkTests.ServiceAsync),
+    ("explicit Wi-Fi correction preserves pairing and connection ports", DeviceNetworkTests.OverrideAsync),
+    ("TCP diagnostics distinguish port reachability from ADB readiness", DeviceNetworkTests.DiagnosticsAsync),
+    ("ADB transport snapshot identifies multiple USB devices by serial and transport ID", AdbTransportTests.ParseAsync),
+    ("ADB transport framing reads one bounded binary snapshot", AdbTransportTests.FrameAsync),
+    ("ADB transport probe honors server endpoint overrides without silent fallback", AdbTransportTests.EndpointAsync),
+    ("multiple Windows USB transports remain distinct from socket connections during wireless actions", AdbTransportTests.MultipleUsbAsync),
+    ("ADB transport refresh bypasses stale device property cache", AdbTransportTests.RefreshAsync),
+    ("wireless confirmation rechecks authoritative per-device USB evidence", AdbTransportTests.ConfirmationAsync),
+    ("ADB transport probe stops its own client on timeout and cancellation", AdbTransportTests.CancellationAsync),
+    ("command library presets preserve device scope and searchable metadata", ConsoleLibraryTests.CatalogAsync),
+    ("command library validates parameters quotes once and confirms mutations", ConsoleLibraryTests.ParametersAsync),
+    ("command library persists bounded ID-only favorites and recent selections", ConsoleLibraryTests.PreferencesAsync),
+    ("installed apps preserve current Android user and numeric version details", InstalledAppsTests.SnapshotAsync),
+    ("installed app actions validate package user and launch component", InstalledAppsTests.ActionsAsync),
+    ("installed apps reject false success and stop canceled operations", InstalledAppsTests.FailureAndCancellationAsync),
+    ("installed app details distinguish package versions and user scope", InstalledAppsTests.DetailsAsync),
+    ("slow update metadata retains a valid signed higher code", UpdateVersionCodeTests.SlowNetworkAsync),
+    ("update request diagnostics identify failing steps and preserve caller cancellation", UpdateVersionCodeTests.RequestDiagnosticsAsync),
+    ("numeric updates order signed version codes after channel filtering", UpdateVersionCodeTests.DiscoveryAsync),
+    ("numeric update metadata is authenticated and strictly parsed", UpdateVersionCodeTests.MetadataAsync),
+    ("numeric update downloads recheck retained version identity", UpdateVersionCodeTests.DownloadAsync),
+    ("numeric update installation rejects downgrade and altered metadata", UpdateVersionCodeTests.InstallerPolicyAsync),
+    ("update versions follow SemVer including numeric prereleases", UpdateDownloadTests.VersionsAsync),
+    ("update manifests require valid signatures and safe complete file lists", UpdateDownloadTests.ManifestAsync),
+    ("update discovery validates repository channels versions and redirects", UpdateDownloadTests.DiscoveryAsync),
+    ("update downloads enforce sizes hashes cancellation and owned cleanup", UpdateDownloadTests.DownloadAsync),
+    ("update installer preserves unknown files and skips unchanged locked tools", UpdateInstallTests.TransactionAsync),
+    ("update installer rolls back replacements and newly created files", UpdateInstallTests.RollbackAsync),
+    ("update installer never relaunches an incompletely restored installation", UpdateInstallTests.IncompleteRollbackAsync),
+    ("update installer rejects locked changed files and corrupt payloads", UpdateInstallTests.LockedAndCorruptAsync),
+    ("update installer rejects unsafe or inconsistent ZIP entries", UpdateInstallTests.ZipValidationAsync),
+    ("log capture validates targets and parses UID and preview lines", LogCaptureTests.ParametersAndParsingAsync),
+    ("log capture rotates UTF8 files without discarding complete logs", LogCaptureTests.RotationAsync),
+    ("network history pages bounded metadata and validates body paths", NetworkCaptureHistoryTests.RunAsync),
+    ("capture curl rejects incomplete and unsafe requests", NetworkCaptureExportTests.CurlSafetyAsync),
+    ("capture HAR preserves complete data and marks missing fields", NetworkCaptureExportTests.HarFidelityAsync),
+    ("capture bodies decode within bounds and filters match precisely", NetworkCaptureExportTests.BodyAndFiltersAsync),
+    ("network proxy restores exact baseline and preserves external changes", NetworkCaptureTests.ProxyRecoveryAsync),
+    ("network protocol bounds previews and ignores invalid events", NetworkCaptureTests.ProtocolAsync),
+    ("network capture rolls back startup and owns only its reverse channel", NetworkCaptureTests.LifecycleAsync),
+    ("layout hierarchy preserves attributes and rejects unsafe or oversized nesting", LayoutTests.ParserAsync),
+    ("layout capture targets device and cleans temporary files on failure and cancellation", LayoutTests.CaptureAsync),
+    ("toolbox parses foreground recent tasks and process ownership separately", ToolboxTests.ParseAsync),
+    ("toolbox keeps device targeting partial failures and ordered server restart", ToolboxTests.ServiceAsync),
+    ("console commands preserve Android quoting and require the selected target", ConsoleParsingAsync),
+    ("console pairing and conservative history never retain credentials", ConsolePrivacyAsync),
+    ("console history persists bounded MRU and discards stale unsafe entries", ConsoleHistoryAsync),
+    ("console runner streams bounded chunks from both pipes and preserves nonzero exit", ConsoleStreamingAsync),
+    ("console runner distinguishes timeout and cancellation and kills its own child", ConsoleCancellationAsync),
+    ("console cancellation preserves a shared server spawned by its client", () => SharedServerSurvivalAsync(false)),
+    ("screenshot cancellation preserves a shared server spawned by its client", () => SharedServerSurvivalAsync(true)),
     ("connection history persists recent unique endpoints and clears across restarts", ConnectionHistoryAsync),
     ("connection history recovers corrupt data and rejects invalid new endpoints", ConnectionHistoryRecoveryAsync),
     ("connection history removes only the chosen endpoint and persists the remaining order", ConnectionHistoryRemovalAsync),
@@ -59,6 +115,190 @@ foreach (var test in tests)
 
 Console.WriteLine($"RESULT {tests.Length - failures.Count}/{tests.Length} passed");
 Environment.ExitCode = failures.Count == 0 ? 0 : 1;
+
+static Task ConsoleParsingAsync()
+{
+    foreach (var input in new[] { "devices -l", "help", "version", "start-server", "kill-server", "server-status", "mdns services", "connect 192.0.2.3:5555", "disconnect", "track-devices -l", "keygen adbkey" })
+    {
+        var global = ConsoleCommand.Parse("adb " + input, "chosen");
+        True(global.IsGlobal, input + " is global");
+        False(global.Arguments.Contains("-s"), "global commands never get serial");
+    }
+    var command = ConsoleCommand.Parse("adb.exe -s chosen shell echo 'hello world' | grep hello", "chosen");
+    True(command.Arguments.SequenceEqual(new[] { "-s", "chosen", "shell", "echo 'hello world' | grep hello" }), "shell tail preserves Android quotes and pipe as one argument");
+    Equal("shell echo 'hello world' | grep hello", command.HistoryText, "history has no target prefix");
+    command = ConsoleCommand.Parse("shell \"echo 'hello world' | grep hello\"", "chosen");
+    Equal("echo 'hello world' | grep hello", command.Arguments[^1], "one outer shell wrapper removed");
+    command = ConsoleCommand.Parse("install \"C:\\Phone apps\\test.apk\"", "chosen");
+    Equal("C:\\Phone apps\\test.apk", command.Arguments[^1], "Windows paths keep backslashes");
+    foreach (var path in new[] { "C:\\Phone apps\\", "C:\\Phone apps\\test.apk", "name \"quoted\".apk", "name;with&symbols.apk" })
+        Equal(path, ConsoleCommand.Parse("install " + ConsoleCommand.QuoteArgument(path), "chosen").Arguments[^1], "quoted paths roundtrip without mangling: " + path);
+    foreach (var input in new[] { "", "adb", "-s other shell id", "-d shell id", "-e shell id", "-t 1 shell id", "-H remote devices", "-P 5038 devices", "devices && whoami", "devices | findstr usb", "devices; version", "devices\nversion", "shell", "shell -t", "exec-out screencap -p" })
+        Throws<ArgumentException>(() => ConsoleCommand.Parse(input, "chosen"));
+    Throws<ArgumentException>(() => ConsoleCommand.Parse("shell id", null));
+    Throws<ArgumentException>(() => ConsoleCommand.Parse("-s chosen devices", "chosen"));
+    foreach (var input in new[] { "forward --list", "forward --remove-all", "reconnect offline" })
+    {
+        var global = ConsoleCommand.Parse(input, null);
+        True(global.IsGlobal, "global subform requires no selected phone: " + input);
+        False(global.Arguments.Contains("-s"), "global subform has no injected serial: " + input);
+        Throws<ArgumentException>(() => ConsoleCommand.Parse("-s chosen " + input, "chosen"));
+    }
+    False(ConsoleCommand.Parse("reverse --remove-all", "chosen").IsGlobal, "reverse cleanup stays device scoped");
+    False(ConsoleCommand.Parse("forward --remove tcp:8080", "chosen").IsGlobal, "individual forward removal stays device scoped");
+    foreach (var input in new[] { "wait-for-device pair 192.0.2.1:37001 123456", "wait-for-device kill-server", "wait-for-device disconnect", "wait-for-usb-device shell echo hello" })
+        Throws<ArgumentException>(() => ConsoleCommand.Parse(input, "chosen"));
+    True(ConsoleCommand.Parse("wait-for-device", "chosen").Arguments.SequenceEqual(new[] { "-s", "chosen", "wait-for-device" }), "standalone wait remains available");
+    foreach (var input in new[] { "raw host:kill", "server nodaemon", "attach other", "track-devices --proto-binary" })
+        Throws<ArgumentException>(() => ConsoleCommand.Parse(input, "chosen"));
+    return Task.CompletedTask;
+}
+
+static Task ConsolePrivacyAsync()
+{
+    var pair = ConsoleCommand.Parse("adb pair 192.0.2.3:37001 123456", null);
+    True(pair.IsGlobal, "pair is global");
+    Equal("123456\n", pair.StandardInput, "code only travels on stdin");
+    True(pair.Arguments.SequenceEqual(new[] { "pair", "192.0.2.3:37001" }), "no code in process argument list");
+    False(pair.Preview.Contains("123456"), "preview redacted");
+    False(pair.HistoryText.Contains("123456"), "history text redacted");
+    False(pair.ToString().Contains("123456"), "record diagnostic representation redacted");
+    Equal("code [已隐藏] echoed", pair.Redact("code 123456 echoed"), "echoed credentials sanitized");
+    False(pair.CanRemember, "pair never persisted");
+    Throws<ArgumentException>(() => ConsoleCommand.Parse("pair 192.0.2.3:37001", null));
+    foreach (var input in new[] { "shell getprop", "shell getprop ro.product.model", "shell wm size", "shell pm list packages", "shell dumpsys battery", "logcat -d", "logcat -v time", "logcat -d -v time", "devices -l" })
+        True(ConsoleCommand.Parse(input, "chosen").CanRemember, "safe query remembered: " + input);
+    foreach (var input in new[] { "shell input text my-password", "shell echo secret", "shell getprop; echo secret", "shell getprop | grep secret", "logcat -f secret.txt", "install --unexpected secret", "pull /sdcard/private.txt", "uninstall secret-token", "push --sync secret" })
+        False(ConsoleCommand.Parse(input, "chosen").CanRemember, "arbitrary data not remembered: " + input);
+    foreach (var input in new[] { "install \"C:\\Phone apps\\test.apk\"", "install -r test.apk", "push local.txt /sdcard/file.txt", "pull /sdcard/file.txt local.txt", "bugreport report.zip", "uninstall com.example.app" })
+        True(ConsoleCommand.Parse(input, "chosen").CanRemember, "known path/package form retained: " + input);
+    return Task.CompletedTask;
+}
+
+static Task ConsoleHistoryAsync()
+{
+    using var directory = new TempDirectory();
+    var path = Path.Combine(directory.Path, "console.json");
+    var store = new ConsoleCommandHistoryStore(path);
+    Equal(0, store.Load().Count, "empty initial history");
+    for (var i = 0; i < 35; i++) store.Remember($"shell getprop ro.test.property{i}");
+    var entries = new ConsoleCommandHistoryStore(path).Load();
+    Equal(30, entries.Count, "bounded MRU");
+    Equal("shell getprop ro.test.property34", entries[0], "newest first");
+    store.Remember("adb shell getprop ro.test.property10");
+    Equal("shell getprop ro.test.property10", store.Load()[0], "canonical deduplication moves to front");
+    Equal(29, store.Remove("shell getprop ro.test.property10").Count, "remove exact record");
+    Throws<ArgumentException>(() => store.Remember("shell input text password"));
+    File.WriteAllText(path, "[\"pair 192.0.2.1:37001 123456\",\"shell echo password\",null,\"adb devices -l\",\"devices -l\",\"-s stale shell getprop\"]");
+    True(store.Load().SequenceEqual(new[] { "devices -l" }), "unsafe and explicitly targeted legacy records removed");
+    False(File.ReadAllText(path).Contains("123456"), "stale secret physically removed from disk");
+    File.WriteAllText(path, "broken JSON");
+    Equal(0, store.Load().Count, "malformed recovery");
+    store.Remember("version");
+    store.Clear();
+    Equal(0, new ConsoleCommandHistoryStore(path).Load().Count, "clear persists across restart");
+    return Task.CompletedTask;
+}
+
+static async Task ConsoleStreamingAsync()
+{
+    using var fixture = new ToolFixture();
+    var runner = new ConsoleCommandRunner(fixture.Paths);
+    long stdout = 0, stderr = 0;
+    var chunks = new ConcurrentQueue<int>();
+    var firstOutput = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var pending = runner.RunAsync(ConsoleCommand.Parse("shell console-flood", "console"), (text, isError) =>
+    {
+        chunks.Enqueue(text.Length);
+        if (isError) Interlocked.Add(ref stderr, text.Length); else Interlocked.Add(ref stdout, text.Length);
+        firstOutput.TrySetResult();
+    }, TimeSpan.FromSeconds(10), CancellationToken.None);
+    await firstOutput.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    False(pending.IsCompleted, "unterminated output delivered before process exits");
+    Equal(7, await pending, "nonzero exit retained");
+    Equal(1024L * 1024, stdout, "all stdout drained");
+    Equal(1024L * 1024, stderr, "all stderr drained concurrently");
+    True(chunks.All(length => length <= 4096), "bounded callback chunks with no newlines");
+    True(fixture.HasInvocation("-s", "console", "shell", "console-flood"), "selected target only");
+    fixture.SetPairResult("code 123456 echoed");
+    var output = new ConcurrentQueue<string>();
+    await runner.RunAsync(ConsoleCommand.Parse("pair 192.0.2.3:37001 123456", null), (value, _) => output.Enqueue(value), TimeSpan.FromSeconds(5), CancellationToken.None);
+    False(string.Concat(output).Contains("123456"), "runner sanitizes echoed code");
+    True(fixture.HasInvocation("pair", "192.0.2.3:37001"), "pair argv never contains secret");
+    output.Clear();
+    await runner.RunAsync(ConsoleCommand.Parse("pair split-secret:37001 123456", null), (value, _) => output.Enqueue(value), TimeSpan.FromSeconds(5), CancellationToken.None);
+    False(string.Concat(output).Contains("123456"), "pair secret split across reads is redacted");
+}
+
+static async Task ConsoleCancellationAsync()
+{
+    using var fixture = new ToolFixture();
+    var runner = new ConsoleCommandRunner(fixture.Paths);
+    var command = ConsoleCommand.Parse("shell console-hang", "console");
+    using var cancel = new CancellationTokenSource();
+    var pending = runner.RunAsync(command, (_, _) => { }, null, cancel.Token);
+    var pidPath = Path.Combine(fixture.DirectoryPath, "console-pid.txt");
+    await TestWait.UntilAsync(() => File.Exists(pidPath), TimeSpan.FromSeconds(5));
+    var pid = int.Parse(await File.ReadAllTextAsync(pidPath));
+    cancel.Cancel();
+    await ThrowsAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+    await AssertConsoleProcessExitedAsync(pid);
+    await ThrowsAsync<TimeoutException>(() => runner.RunAsync(command, (_, _) => { }, TimeSpan.FromSeconds(2), CancellationToken.None));
+    pid = int.Parse(await File.ReadAllTextAsync(pidPath));
+    await AssertConsoleProcessExitedAsync(pid);
+    False(fixture.HasInvocation("kill-server"), "cancel does not stop shared adb server");
+}
+
+static async Task AssertConsoleProcessExitedAsync(int pid)
+{
+    await TestWait.UntilAsync(() =>
+    {
+        try { using var process = Process.GetProcessById(pid); return process.HasExited; }
+        catch (ArgumentException) { return true; }
+    }, TimeSpan.FromSeconds(3));
+}
+
+static async Task SharedServerSurvivalAsync(bool screenshot)
+{
+    using var fixture = new ToolFixture();
+    using var cancel = new CancellationTokenSource();
+    var processIdsPath = Path.Combine(fixture.DirectoryPath, "console-server-processes.txt");
+    Process? sharedServer = null;
+    Task pending = screenshot ? new ScreenshotService(fixture.Paths).CaptureAsync("capture-shared-server", cancel.Token) : new ConsoleCommandRunner(fixture.Paths).RunAsync(
+        ConsoleCommand.Parse("shell console-start-shared-server", "console"), (_, _) => { }, null, cancel.Token);
+    try
+    {
+        await TestWait.UntilAsync(() => File.Exists(processIdsPath), TimeSpan.FromSeconds(5));
+        var ids = (await File.ReadAllTextAsync(processIdsPath)).Split('|').Select(int.Parse).ToArray();
+        // Retain the exact process handle before canceling so cleanup never selects
+        // an unrelated process if Windows later reuses this PID.
+        sharedServer = Process.GetProcessById(ids[1]);
+        _ = sharedServer.Handle;
+        False(sharedServer.HasExited, "fake shared server has started");
+        cancel.Cancel();
+        await ThrowsAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+        await AssertConsoleProcessExitedAsync(ids[0]);
+        False(sharedServer.HasExited, "cancel stops only the adb client, preserving its shared-server descendant");
+        False(fixture.HasInvocation("kill-server"), "no global server-stop command submitted");
+    }
+    finally
+    {
+        cancel.Cancel();
+        try { await pending.WaitAsync(TimeSpan.FromSeconds(5)); }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (sharedServer is not null)
+            {
+                using (sharedServer)
+                {
+                    if (!sharedServer.HasExited) sharedServer.Kill(entireProcessTree: false);
+                    await sharedServer.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                }
+            }
+        }
+    }
+}
 
 static Task ConnectionHistoryAsync()
 {
@@ -330,7 +570,7 @@ static async Task DeviceDetailsAsync()
         "emulator transport");
 
     var locked = devices.Single(device => device.Serial == "locked-one");
-    Equal(DeviceTransport.Unknown, locked.Transport, "unauthorized transport is not guessed from serial shape");
+    Equal(DeviceTransport.Usb, locked.Transport, "explicit usb path identifies transport even before authorization");
     Equal(0, fixture.InvocationsForSerial("locked-one").Count, "unauthorized device has no probes");
 }
 
@@ -451,7 +691,7 @@ static async Task WirelessEnableAsync()
 static async Task WirelessReadinessFailureAsync()
 {
     using var fixture = ReadyUsbWirelessFixture("wire-four");
-    fixture.SetResponse("wire-four", "wifi", "inet 198.51.100.8/24 scope global wlan0");
+    fixture.SetResponse("wire-four", "wifi", "7: wlan0 inet 198.51.100.8/24 scope global wlan0");
     fixture.SetResponse("198.51.100.8:5555", "state", "offline");
     var result = await new AdbService(fixture.Paths).SetWirelessAsync(
         new DeviceInfo("wire-four", "Phone", "device") { Transport = DeviceTransport.Usb }, true);
@@ -854,11 +1094,15 @@ sealed class ToolFixture : IDisposable
     private readonly string? _previousPairResult = Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_RESULT");
     private readonly string? _previousPairExit = Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_EXIT");
     private readonly string? _previousPairHang = Environment.GetEnvironmentVariable("ADBDESK_TEST_PAIR_HANG");
+    private readonly string? _previousAdbSocket = Environment.GetEnvironmentVariable("ADB_SERVER_SOCKET");
     public ToolPaths Paths { get; }
+    public TestAdbTransportServer TransportServer { get; }
     public string DirectoryPath => _directory.Path;
 
     public ToolFixture()
     {
+        TransportServer = new TestAdbTransportServer(_directory.Path);
+        Environment.SetEnvironmentVariable("ADB_SERVER_SOCKET", TransportServer.SocketSpec);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL", "1");
         Environment.SetEnvironmentVariable("ADBDESK_TEST_DIRECTORY", _directory.Path);
         var executable = Environment.ProcessPath ?? throw new InvalidOperationException("Test executable path unavailable.");
@@ -966,6 +1210,8 @@ sealed class ToolFixture : IDisposable
 
     public void Dispose()
     {
+        TransportServer.Dispose();
+        Environment.SetEnvironmentVariable("ADB_SERVER_SOCKET", _previousAdbSocket);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL", _previousMode);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_DIRECTORY", _previousDirectory);
         Environment.SetEnvironmentVariable("ADBDESK_TEST_DELAY_MS", _previousDelay);
@@ -1011,6 +1257,49 @@ static class FakeTool
     {
         var directory = Environment.GetEnvironmentVariable("ADBDESK_TEST_DIRECTORY")!;
         await File.WriteAllTextAsync(Path.Combine(directory, $"call-{DateTime.UtcNow.Ticks}-{Environment.ProcessId}.txt"), string.Join('|', arguments));
+        if (arguments is ["--console-shared-server"])
+        {
+            await Task.Delay(TimeSpan.FromMinutes(2));
+            return;
+        }
+        if (arguments is ["-s", "console", "shell", "console-start-shared-server"] or ["-s", "capture-shared-server", "exec-out", "screencap", "-p"])
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = Environment.ProcessPath!,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            startInfo.ArgumentList.Add("--console-shared-server");
+            using var sharedServer = Process.Start(startInfo) ?? throw new InvalidOperationException("Fake shared server failed to start.");
+            var processIdsPath = Path.Combine(directory, "console-server-processes.txt");
+            await File.WriteAllTextAsync(processIdsPath + ".tmp", $"{Environment.ProcessId}|{sharedServer.Id}");
+            File.Move(processIdsPath + ".tmp", processIdsPath);
+            await Task.Delay(TimeSpan.FromMinutes(2));
+            return;
+        }
+        if (arguments is ["-s", "console", "shell", "console-flood"])
+        {
+            await Task.WhenAll(Console.Out.WriteAsync(new string('o', 1024 * 1024)), Console.Error.WriteAsync(new string('e', 1024 * 1024)));
+            await Task.Delay(500);
+            Environment.ExitCode = 7;
+            return;
+        }
+        if (arguments is ["-s", "console", "shell", "console-hang"])
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory, "console-pid.txt"), Environment.ProcessId.ToString());
+            await Task.Delay(TimeSpan.FromMinutes(2));
+            return;
+        }
+        if (arguments is ["pair", "split-secret:37001"])
+        {
+            var secret = (await Console.In.ReadToEndAsync()).Trim();
+            await Console.Out.WriteAsync(secret[..3]);
+            await Console.Out.FlushAsync();
+            await Task.Delay(150);
+            await Console.Out.WriteAsync(secret[3..]);
+            return;
+        }
         if (arguments is ["-s", var captureSerial, "exec-out", "screencap", "-p"])
         {
             if (captureSerial == "capture-hang")
@@ -1124,6 +1413,17 @@ static class FakeTool
         if (arguments is ["-s", var nameSerial, "shell", "settings", "get", "global", "device_name"])
         {
             await RespondAsync(directory, nameSerial, "device-name");
+            return;
+        }
+        if (arguments is ["-s", _, "shell", "wm", "size"] or ["-s", _, "shell", "wm size"])
+        {
+            await RespondAsync(directory, arguments[1], "display-size");
+            return;
+        }
+        if (arguments is ["-s", var networkSerial, "shell", "ip", "-o", "-4", "addr", "show"])
+        {
+            var kind = File.Exists(ResponsePath(directory, networkSerial, "network")) ? "network" : "wifi";
+            await RespondAsync(directory, networkSerial, kind);
             return;
         }
         if (arguments is ["-s", var wifiSerial, "shell", "ip", "-o", "-4", "addr", "show", "wlan0"])
