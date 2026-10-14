@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AdbDesk.App/AdbDesk.App.csproj" />
+    <Project Path="src/AdbDesk.Core/AdbDesk.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AdbDesk.Core.Tests/AdbDesk.Core.Tests.csproj" />
+    <Project Path="tests/AdbDesk.Instance.Tests/AdbDesk.Instance.Tests.csproj" />
+    <Project Path="tests/AdbDesk.Qr.Tests/AdbDesk.Qr.Tests.csproj" />
+  </Folder>
+</Solution>

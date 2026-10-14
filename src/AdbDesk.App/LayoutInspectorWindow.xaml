@@ -1,0 +1,92 @@
+<Window x:Class="AdbDesk.App.LayoutInspectorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:AdbDesk.App"
+        Title="当前页面布局" Icon="Assets/AdbDesk.ico" Width="1260" Height="820" MinWidth="960" MinHeight="620"
+        WindowStartupLocation="CenterOwner" Loaded="Window_Loaded" Closing="Window_Closing">
+    <Window.Resources>
+        <ItemsPanelTemplate x:Key="LayoutTreePanel"><local:LayoutVirtualizingPanel/></ItemsPanelTemplate>
+        <HierarchicalDataTemplate DataType="{x:Type local:LayoutTreeItem}" ItemsSource="{Binding Children}">
+            <TextBlock Text="{Binding Node.Label}" TextWrapping="NoWrap" ToolTip="{Binding Node.ResourceId}"/>
+        </HierarchicalDataTemplate>
+        <Style TargetType="TreeViewItem">
+            <Setter Property="ItemsPanel" Value="{StaticResource LayoutTreePanel}"/>
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+            <EventSetter Event="Selected" Handler="TreeItem_Selected"/>
+            <Setter Property="Padding" Value="3,4"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="18">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="当前页面布局" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock x:Name="DeviceText" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,5,12,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+            </StackPanel>
+            <WrapPanel Grid.Column="1">
+                <Button x:Name="RefreshButton" Content="刷新布局" Click="Refresh_Click" Margin="0,0,6,0" Style="{StaticResource PrimaryButtonStyle}"/>
+                <Button x:Name="CancelButton" Content="停止" Click="Cancel_Click" IsEnabled="False" Margin="0,0,6,0"/>
+                <Button x:Name="SaveXmlButton" Content="导出 XML" Click="SaveXml_Click" IsEnabled="False" Margin="0,0,6,0"/>
+                <Button x:Name="SaveImageButton" Content="保存截图" Click="SaveImage_Click" IsEnabled="False"/>
+            </WrapPanel>
+        </Grid>
+        <Border Grid.Row="1" Background="#EAF2FF" CornerRadius="7" Padding="10,8" Margin="0,12,0,12">
+            <TextBlock Text="点击截图或控件树查看属性，不会点击手机。布局和截图顺序采集，请保持手机页面静止；这里只显示系统可访问的节点。" Foreground="#365B91" FontSize="12"/>
+        </Border>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*" MinWidth="230"/><ColumnDefinition Width="10"/><ColumnDefinition Width="1*" MinWidth="220"/><ColumnDefinition Width="10"/><ColumnDefinition Width="0.9*" MinWidth="230"/></Grid.ColumnDefinitions>
+            <Border Style="{StaticResource CardStyle}" Padding="10" ClipToBounds="True">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="屏幕快照" FontWeight="SemiBold" Margin="4,0,0,8"/>
+                    <Grid Grid.Row="1" Background="#E8EDF4">
+                        <Viewbox Stretch="Uniform" StretchDirection="Both">
+                            <Canvas x:Name="ScreenCanvas" Width="360" Height="720" Background="Transparent" ClipToBounds="True" MouseLeftButtonDown="Screen_Click">
+                                <Image x:Name="ScreenImage" Stretch="Fill" IsHitTestVisible="False"/>
+                                <Rectangle x:Name="SelectionBox" Visibility="Collapsed" Stroke="#FF6B35" Fill="#22FF6B35" IsHitTestVisible="False"/>
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock x:Name="ImagePlaceholder" Text="正在读取页面…" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15" IsHitTestVisible="False" Foreground="{StaticResource MutedBrush}"/>
+                    </Grid>
+                    <TextBlock x:Name="ImageInfo" Grid.Row="2" Text="截图不可用时仍可查看成功读取的控件树。" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/>
+                </Grid>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="控件树" FontWeight="SemiBold" Margin="4,0,0,8"/>
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Content="下一个" Padding="10,0" Margin="6,0,0,0" Click="Find_Click"/>
+                        <TextBox x:Name="SearchInput" Padding="7,6" ToolTip="搜索文字、ID、类名或其他属性，按回车查找" AutomationProperties.Name="搜索控件" KeyDown="Search_KeyDown"/>
+                    </DockPanel>
+                    <TextBlock x:Name="NodeCountText" DockPanel.Dock="Bottom" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0"/>
+                    <TreeView x:Name="NodeTree" ItemsPanel="{StaticResource LayoutTreePanel}" BorderThickness="0" SelectedItemChanged="NodeTree_SelectedItemChanged"
+                              VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                </DockPanel>
+            </Border>
+            <Border Grid.Column="4" Style="{StaticResource CardStyle}" Padding="10">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="控件属性" FontWeight="SemiBold" Margin="4,0,0,8"/>
+                    <DataGrid x:Name="PropertiesGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
+                              HeadersVisibility="Column" SelectionMode="Single" SelectionUnit="FullRow" GridLinesVisibility="Horizontal" Background="White" BorderThickness="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="属性" Binding="{Binding Name}" Width="100"/>
+                            <DataGridTextColumn Header="值" Binding="{Binding Value}" Width="*">
+                                <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="ToolTip" Value="{Binding Value}"/></Style></DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                    <WrapPanel Grid.Row="2" Margin="0,8,0,0">
+                        <Button Content="复制属性值" Click="CopyValue_Click" Padding="10,0" Margin="0,0,6,5"/>
+                        <Button Content="复制全部" Click="CopyAll_Click" Padding="10,0" Margin="0,0,0,5"/>
+                    </WrapPanel>
+                </Grid>
+            </Border>
+        </Grid>
+        <TextBox x:Name="StatusText" Grid.Row="3" Text="准备读取…" IsReadOnly="True" IsUndoEnabled="False" BorderThickness="0" Background="Transparent"
+                 Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="2,10,2,0" TextWrapping="Wrap" MaxHeight="65" VerticalScrollBarVisibility="Auto"/>
+    </Grid>
+</Window>

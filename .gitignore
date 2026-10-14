@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+.tools/
+.superpowers/
+tools/
+dist/
+artifacts/
+.vs/
+*.user
+**/__pycache__/
+*.pyc

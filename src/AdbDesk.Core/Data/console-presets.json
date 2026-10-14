@@ -1,0 +1,2108 @@
+[
+  {
+    "Id": "device.list",
+    "Category": "设备与系统",
+    "Title": "已连接设备",
+    "Description": "列出电脑上全部 ADB 连接及授权状态。",
+    "Command": "devices -l",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "USB 无线 serial",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.state",
+    "Category": "设备与系统",
+    "Title": "设备状态",
+    "Description": "查询所选设备的 ADB 状态。",
+    "Command": "get-state",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.serial",
+    "Category": "设备与系统",
+    "Title": "设备序列号",
+    "Description": "查询所选设备序列号。",
+    "Command": "get-serialno",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.model",
+    "Category": "设备与系统",
+    "Title": "设备型号",
+    "Description": "读取手机产品型号。",
+    "Command": "shell getprop ro.product.model",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.brand",
+    "Category": "设备与系统",
+    "Title": "设备品牌",
+    "Description": "读取手机品牌。",
+    "Command": "shell getprop ro.product.brand",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.android",
+    "Category": "设备与系统",
+    "Title": "Android 版本",
+    "Description": "读取 Android 系统版本。",
+    "Command": "shell getprop ro.build.version.release",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "系统版本 release",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.sdk",
+    "Category": "设备与系统",
+    "Title": "SDK API 级别",
+    "Description": "读取系统 SDK API level，便于判断命令兼容性。",
+    "Command": "shell getprop ro.build.version.sdk",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.patch",
+    "Category": "设备与系统",
+    "Title": "安全补丁日期",
+    "Description": "读取系统安全补丁日期；旧系统可能返回空值。",
+    "Command": "shell getprop ro.build.version.security_patch",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.abi",
+    "Category": "设备与系统",
+    "Title": "CPU 架构列表",
+    "Description": "查看系统支持的 ABI 架构。",
+    "Command": "shell getprop ro.product.cpu.abilist",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "arm64 armeabi x86",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.build",
+    "Category": "设备与系统",
+    "Title": "系统构建指纹",
+    "Description": "查看固件构建指纹。",
+    "Command": "shell getprop ro.build.fingerprint",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.properties",
+    "Category": "设备与系统",
+    "Title": "全部系统属性",
+    "Description": "列出系统属性。输出中可能包含设备标识。",
+    "Command": "shell getprop",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.battery",
+    "Category": "设备与系统",
+    "Title": "电池信息",
+    "Description": "查看电量、充电状态及温度。",
+    "Command": "shell dumpsys battery",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "device.uptime",
+    "Category": "设备与系统",
+    "Title": "系统运行时间",
+    "Description": "查看开机运行时间和系统负载。",
+    "Command": "shell uptime",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "device.user",
+    "Category": "设备与系统",
+    "Title": "当前 Android 用户",
+    "Description": "查看当前前台 Android 用户编号。",
+    "Command": "shell am get-current-user",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "多用户 工作资料",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "system.reboot",
+    "Category": "设备与系统",
+    "Title": "重启手机",
+    "Description": "重启当前设备，连接和投屏将中断。",
+    "Command": "reboot",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将重启所选手机，未保存的应用状态可能丢失，连接和投屏将中断。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "app.all",
+    "Category": "应用管理",
+    "Title": "全部已安装应用",
+    "Description": "列出当前 Android 用户安装的包名。",
+    "Command": "shell pm list packages --user current",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.thirdparty",
+    "Category": "应用管理",
+    "Title": "第三方应用",
+    "Description": "列出当前用户的第三方应用。",
+    "Command": "shell pm list packages --user current -3",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.system",
+    "Category": "应用管理",
+    "Title": "系统应用",
+    "Description": "列出当前用户的系统应用。",
+    "Command": "shell pm list packages --user current -s",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.disabled",
+    "Category": "应用管理",
+    "Title": "已停用应用",
+    "Description": "列出当前用户已停用的应用。",
+    "Command": "shell pm list packages --user current -d",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.enabled",
+    "Category": "应用管理",
+    "Title": "已启用应用",
+    "Description": "列出当前用户已启用的应用。",
+    "Command": "shell pm list packages --user current -e",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.versions",
+    "Category": "应用管理",
+    "Title": "应用版本号列表",
+    "Description": "列出应用包名和数字 versionCode。",
+    "Command": "shell pm list packages --user current --show-versioncode",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "设备支持 pm list packages --show-versioncode；部分旧版或厂商系统不支持",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.paths",
+    "Category": "应用管理",
+    "Title": "APK 安装路径",
+    "Description": "查询所选应用的 base.apk 和拆分 APK 路径。下载文件可使用文件操作分类。",
+    "Command": "shell pm path --user current {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.details",
+    "Category": "应用管理",
+    "Title": "应用详细信息",
+    "Description": "查看包的版本、组件、权限以及各用户状态。此输出包含全局包元数据。",
+    "Command": "shell dumpsys package {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "versionName versionCode targetSdk minSdk",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "app.install",
+    "Category": "应用管理",
+    "Title": "覆盖安装 APK",
+    "Description": "从电脑安装 APK，允许覆盖已有版本；结果显示在本控制台。",
+    "Command": "install -r {0}",
+    "Parameters": [
+      {
+        "Label": "电脑 APK 文件",
+        "Kind": "apk",
+        "DefaultValue": "",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "app.testinstall",
+    "Category": "应用管理",
+    "Title": "安装测试版 APK",
+    "Description": "安装带 testOnly 标记的开发测试 APK。",
+    "Command": "install -r -t {0}",
+    "Parameters": [
+      {
+        "Label": "电脑 APK 文件",
+        "Kind": "apk",
+        "DefaultValue": "",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "app.stop",
+    "Category": "应用管理",
+    "Title": "强制停止应用",
+    "Description": "强制停止当前用户指定应用。",
+    "Command": "shell am force-stop --user current {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将停止指定应用及其后台工作。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "app.clear",
+    "Category": "应用管理",
+    "Title": "清空应用数据",
+    "Description": "清空当前用户的指定应用数据，包括登录状态。",
+    "Command": "shell pm clear --user current {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将永久删除当前 Android 用户的该应用数据和登录状态，无法通过本工具恢复。",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.uninstall",
+    "Category": "应用管理",
+    "Title": "卸载当前用户应用",
+    "Description": "移除当前 Android 用户的指定应用及其数据。系统应用的其他用户安装状态可能保留。",
+    "Command": "shell pm uninstall --user current {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将卸载当前 Android 用户的该应用并移除其数据。",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.disable",
+    "Category": "应用管理",
+    "Title": "停用应用",
+    "Description": "停用当前用户的应用；误停系统组件可能影响手机功能。可用“恢复启用应用”恢复。",
+    "Command": "shell pm disable-user --user current {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将停用指定应用；请确认没有选择桌面、系统界面或其他关键系统组件。",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.enable",
+    "Category": "应用管理",
+    "Title": "恢复启用应用",
+    "Description": "重新启用当前用户的指定应用。",
+    "Command": "shell pm enable --user current {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将修改当前用户的应用启用状态。",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "app.launcher",
+    "Category": "应用管理",
+    "Title": "查询桌面启动入口",
+    "Description": "查询应用的桌面启动 Activity；没有桌面入口时可能返回空。",
+    "Command": "shell pm resolve-activity --brief --user current -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "activity.top",
+    "Category": "Activity 与进程",
+    "Title": "当前前台 Activity",
+    "Description": "查看当前顶部 Activity 及相关状态。",
+    "Command": "shell dumpsys activity top",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "前台 页面 当前APP",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "activity.tasks",
+    "Category": "Activity 与进程",
+    "Title": "Activity 与任务栈",
+    "Description": "查看 Activity 栈、任务和 resumed 状态。",
+    "Command": "shell dumpsys activity activities",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "前台 后台 栈 stack",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "activity.recent",
+    "Category": "Activity 与进程",
+    "Title": "最近任务",
+    "Description": "查看最近任务；最近出现不代表应用仍在运行。",
+    "Command": "shell dumpsys activity recents",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "activity.processes",
+    "Category": "Activity 与进程",
+    "Title": "应用进程详情",
+    "Description": "查看进程状态、重要性及包名映射。",
+    "Command": "shell dumpsys activity processes",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "后台 缓存 process",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "activity.services",
+    "Category": "Activity 与进程",
+    "Title": "运行服务",
+    "Description": "查看 ActivityManager 管理的运行服务。",
+    "Command": "shell dumpsys activity services",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "activity.ps",
+    "Category": "Activity 与进程",
+    "Title": "全部 Linux 进程",
+    "Description": "列出手机 Linux 进程，包括系统和应用进程。",
+    "Command": "shell ps -A",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 8+ Toybox ps；旧系统参数可能不同",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "activity.pid",
+    "Category": "Activity 与进程",
+    "Title": "应用进程 PID",
+    "Description": "查询与包名同名的主进程 PID；未运行时可能没有输出。",
+    "Command": "shell pidof {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "activity.start",
+    "Category": "Activity 与进程",
+    "Title": "启动指定 Activity",
+    "Description": "通过组件名启动 Activity；非导出组件可能拒绝 shell 调用。",
+    "Command": "shell am start --user current -n {0}",
+    "Parameters": [
+      {
+        "Label": "组件名",
+        "Kind": "component",
+        "DefaultValue": "",
+        "Hint": "例如 com.example.app/.MainActivity"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "启动 页面 component",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "activity.deeplink",
+    "Category": "Activity 与进程",
+    "Title": "打开 Deep Link",
+    "Description": "发送 VIEW Intent 打开网页或应用深层链接。",
+    "Command": "shell am start --user current -a android.intent.action.VIEW -d {0}",
+    "Parameters": [
+      {
+        "Label": "链接 URI",
+        "Kind": "url",
+        "DefaultValue": "https://example.com",
+        "Hint": "支持 https:// 或应用自定义 scheme。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "URL Intent 跳转",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "activity.broadcast",
+    "Category": "Activity 与进程",
+    "Title": "发送广播",
+    "Description": "向当前用户发送指定 action 的广播；系统可能限制受保护广播。",
+    "Command": "shell am broadcast --user current -a {0}",
+    "Parameters": [
+      {
+        "Label": "广播 Action",
+        "Kind": "permission",
+        "DefaultValue": "com.example.app.DEBUG",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将向当前用户应用发送广播，接收器可能触发应用操作。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "permission.list",
+    "Category": "权限管理",
+    "Title": "系统权限列表",
+    "Description": "按组列出危险权限定义，供运行时权限调试参考。",
+    "Command": "shell pm list permissions -g -d",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "permission.package",
+    "Category": "权限管理",
+    "Title": "应用权限与包状态",
+    "Description": "输出包管理器记录的权限、组件和用户状态。",
+    "Command": "shell pm dump {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "权限 manifest granted",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "permission.grant",
+    "Category": "权限管理",
+    "Title": "授予运行时权限",
+    "Description": "授予应用已经声明且可由 shell 授予的运行时权限；不支持任意系统签名权限。",
+    "Command": "shell pm grant --user current {0} {1}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      },
+      {
+        "Label": "权限名称",
+        "Kind": "permission",
+        "DefaultValue": "android.permission.CAMERA",
+        "Hint": "例如 android.permission.CAMERA。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 6+；应用已声明可授予的运行时权限",
+    "Confirmation": "将授予指定应用运行时权限。",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "permission.revoke",
+    "Category": "权限管理",
+    "Title": "撤销运行时权限",
+    "Description": "撤销指定运行时权限，系统可能结束应用进程。",
+    "Command": "shell pm revoke --user current {0} {1}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      },
+      {
+        "Label": "权限名称",
+        "Kind": "permission",
+        "DefaultValue": "android.permission.CAMERA",
+        "Hint": "例如 android.permission.CAMERA。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 6+；权限须支持运行时撤销",
+    "Confirmation": "将撤销权限，应用功能可能受限或进程被系统结束。",
+    "Keywords": "",
+    "Source": "https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerShellCommand.java"
+  },
+  {
+    "Id": "permission.appops",
+    "Category": "权限管理",
+    "Title": "查看应用 AppOps",
+    "Description": "查看应用操作权限及最近使用状态。",
+    "Command": "shell cmd appops get --user current {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 6+；AppOps 输出和操作名随系统变化",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "permission.appopset",
+    "Category": "权限管理",
+    "Title": "设置应用 AppOp",
+    "Description": "设置单个 AppOp 模式；操作名和可用模式请先查看设备帮助。",
+    "Command": "shell cmd appops set --user current {0} {1} {2}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      },
+      {
+        "Label": "操作名称",
+        "Kind": "text",
+        "DefaultValue": "CAMERA",
+        "Hint": ""
+      },
+      {
+        "Label": "模式",
+        "Kind": "text",
+        "DefaultValue": "default",
+        "Hint": "常见值：allow、ignore、deny、default。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 6+；以 cmd appops help 为准",
+    "Confirmation": "将修改应用的 AppOp 行为，可能影响功能。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "permission.appophelp",
+    "Category": "权限管理",
+    "Title": "AppOps 命令帮助",
+    "Description": "查看当前设备实际支持的 AppOps 参数和模式。",
+    "Command": "shell cmd appops help",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "设备提供 cmd appops",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.list",
+    "Category": "文件操作",
+    "Title": "浏览手机目录",
+    "Description": "列出目录内容、权限、大小和时间。",
+    "Command": "shell ls -la {0}",
+    "Parameters": [
+      {
+        "Label": "手机目录",
+        "Kind": "remote-path",
+        "DefaultValue": "/sdcard/Download/",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.info",
+    "Category": "文件操作",
+    "Title": "手机文件信息",
+    "Description": "查看手机文件的详细元数据。",
+    "Command": "shell stat {0}",
+    "Parameters": [
+      {
+        "Label": "手机文件路径",
+        "Kind": "remote-path",
+        "DefaultValue": "/sdcard/Download/example.txt",
+        "Hint": "以 / 开头的绝对路径。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.space",
+    "Category": "文件操作",
+    "Title": "存储空间",
+    "Description": "查看已挂载文件系统的容量和可用空间。",
+    "Command": "shell df -h",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.size",
+    "Category": "文件操作",
+    "Title": "目录占用大小",
+    "Description": "统计目录及一级子目录大小；大目录可能耗时。",
+    "Command": "shell du -h -d 1 {0}",
+    "Parameters": [
+      {
+        "Label": "手机目录",
+        "Kind": "remote-path",
+        "DefaultValue": "/sdcard/Download/",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "支持 -d 的 Toybox du；权限不足目录无法统计",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.push",
+    "Category": "文件操作",
+    "Title": "上传文件",
+    "Description": "从电脑上传文件至手机目标路径；同名文件可能被覆盖。",
+    "Command": "push {0} {1}",
+    "Parameters": [
+      {
+        "Label": "电脑文件",
+        "Kind": "file",
+        "DefaultValue": "",
+        "Hint": ""
+      },
+      {
+        "Label": "手机目标路径",
+        "Kind": "remote-path",
+        "DefaultValue": "/sdcard/Download/",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.pull",
+    "Category": "文件操作",
+    "Title": "下载手机文件",
+    "Description": "将手机文件或目录下载到电脑。",
+    "Command": "pull {0} {1}",
+    "Parameters": [
+      {
+        "Label": "手机文件路径",
+        "Kind": "remote-path",
+        "DefaultValue": "/sdcard/Download/example.txt",
+        "Hint": "以 / 开头的绝对路径。"
+      },
+      {
+        "Label": "电脑保存目录",
+        "Kind": "folder",
+        "DefaultValue": "",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.mkdir",
+    "Category": "文件操作",
+    "Title": "创建手机目录",
+    "Description": "创建目录，父目录不存在时一并创建。",
+    "Command": "shell mkdir -p {0}",
+    "Parameters": [
+      {
+        "Label": "手机目录",
+        "Kind": "remote-path",
+        "DefaultValue": "/sdcard/Download/AdbDesk/",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.delete",
+    "Category": "文件操作",
+    "Title": "删除手机文件",
+    "Description": "删除一个文件，不递归删除目录。",
+    "Command": "shell rm -- {0}",
+    "Parameters": [
+      {
+        "Label": "手机文件路径",
+        "Kind": "remote-path",
+        "DefaultValue": "/sdcard/Download/example.txt",
+        "Hint": "以 / 开头的绝对路径。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将永久删除填写的手机文件，无法通过本工具恢复。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "file.private",
+    "Category": "文件操作",
+    "Title": "浏览调试应用私有目录",
+    "Description": "以调试应用身份浏览明确指定用户的数据目录。选择应用时自动填入用户编号；普通发行版通常拒绝访问。",
+    "Command": "shell run-as {0} --user {1} ls -la .",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      },
+      {
+        "Label": "Android 用户编号",
+        "Kind": "user",
+        "DefaultValue": "0",
+        "Hint": "从应用选择器选包名时自动填入当前用户；手填时请先查询当前 Android 用户编号。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "应用为 debuggable 调试版；设备 run-as 支持 --user；用户编号须与应用所属用户一致",
+    "Confirmation": "",
+    "Keywords": "私有 data 数据 调试",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "screen.size",
+    "Category": "屏幕与输入",
+    "Title": "查看屏幕分辨率",
+    "Description": "查询物理尺寸及当前覆盖尺寸。",
+    "Command": "shell wm size",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "screen.density",
+    "Category": "屏幕与输入",
+    "Title": "查看显示密度",
+    "Description": "查询物理 DPI 及当前覆盖 DPI。",
+    "Command": "shell wm density",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "screen.size.set",
+    "Category": "屏幕与输入",
+    "Title": "修改显示分辨率",
+    "Description": "修改逻辑显示尺寸；可使用“恢复默认分辨率”撤销。",
+    "Command": "shell wm size {0}",
+    "Parameters": [
+      {
+        "Label": "宽x高",
+        "Kind": "size",
+        "DefaultValue": "1080x1920",
+        "Hint": "使用英文小写 x，例如 1080x1920。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将修改逻辑分辨率，界面和投屏尺寸可能变化。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "screen.size.reset",
+    "Category": "屏幕与输入",
+    "Title": "恢复默认分辨率",
+    "Description": "移除 wm size 设置的覆盖尺寸。",
+    "Command": "shell wm size reset",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将恢复系统默认显示尺寸。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "screen.density.set",
+    "Category": "屏幕与输入",
+    "Title": "修改显示密度",
+    "Description": "修改逻辑显示 DPI；可使用“恢复默认密度”撤销。",
+    "Command": "shell wm density {0}",
+    "Parameters": [
+      {
+        "Label": "DPI",
+        "Kind": "density",
+        "DefaultValue": "420",
+        "Hint": "本工具允许 72–1200。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将改变界面缩放，应用布局可能变化。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "screen.density.reset",
+    "Category": "屏幕与输入",
+    "Title": "恢复默认密度",
+    "Description": "移除 wm density 设置的覆盖值。",
+    "Command": "shell wm density reset",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将恢复系统默认显示密度。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "input.tap",
+    "Category": "屏幕与输入",
+    "Title": "点击屏幕坐标",
+    "Description": "在手机逻辑屏幕坐标处点击。",
+    "Command": "shell input tap {0} {1}",
+    "Parameters": [
+      {
+        "Label": "X 坐标",
+        "Kind": "coordinate",
+        "DefaultValue": "100",
+        "Hint": "范围 0–65535；应位于实际屏幕内。"
+      },
+      {
+        "Label": "Y 坐标",
+        "Kind": "coordinate",
+        "DefaultValue": "200",
+        "Hint": "范围 0–65535；应位于实际屏幕内。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "input.longpress",
+    "Category": "屏幕与输入",
+    "Title": "长按屏幕坐标",
+    "Description": "在指定位置按住 1 秒，使用零距离滑动模拟长按。",
+    "Command": "shell input swipe {0} {1} {0} {1} 1000",
+    "Parameters": [
+      {
+        "Label": "X 坐标",
+        "Kind": "coordinate",
+        "DefaultValue": "100",
+        "Hint": "范围 0–65535；应位于实际屏幕内。"
+      },
+      {
+        "Label": "Y 坐标",
+        "Kind": "coordinate",
+        "DefaultValue": "200",
+        "Hint": "范围 0–65535；应位于实际屏幕内。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "input.swipe",
+    "Category": "屏幕与输入",
+    "Title": "滑动屏幕",
+    "Description": "从起点滑动到终点，持续 300 毫秒。",
+    "Command": "shell input swipe {0} {1} {2} {3} 300",
+    "Parameters": [
+      {
+        "Label": "起点 X",
+        "Kind": "coordinate",
+        "DefaultValue": "500",
+        "Hint": ""
+      },
+      {
+        "Label": "起点 Y",
+        "Kind": "coordinate",
+        "DefaultValue": "1500",
+        "Hint": ""
+      },
+      {
+        "Label": "终点 X",
+        "Kind": "coordinate",
+        "DefaultValue": "500",
+        "Hint": ""
+      },
+      {
+        "Label": "终点 Y",
+        "Kind": "coordinate",
+        "DefaultValue": "500",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "input.text",
+    "Category": "屏幕与输入",
+    "Title": "输入文字",
+    "Description": "通过 input text 输入文字；适合 ASCII，空格可写成 %s，中文不保证支持。",
+    "Command": "shell input text {0}",
+    "Parameters": [
+      {
+        "Label": "输入内容",
+        "Kind": "text",
+        "DefaultValue": "hello",
+        "Hint": "空格用 %s；中文请使用手机输入法。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "input.home",
+    "Category": "屏幕与输入",
+    "Title": "返回桌面",
+    "Description": "发送 HOME 按键。",
+    "Command": "shell input keyevent 3",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "input.back",
+    "Category": "屏幕与输入",
+    "Title": "返回上一页",
+    "Description": "发送 BACK 按键。",
+    "Command": "shell input keyevent 4",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "input.recents",
+    "Category": "屏幕与输入",
+    "Title": "打开最近任务",
+    "Description": "发送最近任务按键。",
+    "Command": "shell input keyevent 187",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "screen.record",
+    "Category": "屏幕与输入",
+    "Title": "录制手机屏幕",
+    "Description": "录制 MP4 到手机指定路径。结束后用“下载手机文件”取回；停止可能导致文件未完整封装。",
+    "Command": "shell screenrecord --time-limit {1} {0}",
+    "Parameters": [
+      {
+        "Label": "手机 MP4 路径",
+        "Kind": "remote-path",
+        "DefaultValue": "/sdcard/Download/AdbDesk-record.mp4",
+        "Hint": ""
+      },
+      {
+        "Label": "录制秒数",
+        "Kind": "duration",
+        "DefaultValue": "30",
+        "Hint": "范围 1–180 秒。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 4.4+；录屏支持由设备决定",
+    "Confirmation": "将在手机上录制屏幕并写入文件；同名目标可能被覆盖。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "log.dump",
+    "Category": "日志与诊断",
+    "Title": "读取已有日志",
+    "Description": "读取已有 logcat 日志后退出。",
+    "Command": "logcat -d -v time",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/logcat"
+  },
+  {
+    "Id": "log.live",
+    "Category": "日志与诊断",
+    "Title": "实时日志",
+    "Description": "持续显示带线程和进程信息的日志，点击停止结束。",
+    "Command": "logcat -v threadtime",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": true,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/logcat"
+  },
+  {
+    "Id": "log.crash",
+    "Category": "日志与诊断",
+    "Title": "读取崩溃日志",
+    "Description": "读取 crash 缓冲区；没有崩溃记录时可能为空。",
+    "Command": "logcat -b crash -d -v threadtime",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 5+ crash 日志缓冲区",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/logcat"
+  },
+  {
+    "Id": "log.errors",
+    "Category": "日志与诊断",
+    "Title": "实时错误日志",
+    "Description": "持续显示 Error 和 Fatal 级别日志。",
+    "Command": "logcat -v threadtime *:E",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": true,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/logcat"
+  },
+  {
+    "Id": "log.pid",
+    "Category": "日志与诊断",
+    "Title": "按 PID 抓取日志",
+    "Description": "持续读取指定 PID 的日志；应用重启后需要重新查询 PID。",
+    "Command": "logcat -v threadtime --pid={0}",
+    "Parameters": [
+      {
+        "Label": "进程 PID",
+        "Kind": "pid",
+        "DefaultValue": "",
+        "Hint": "请先查询应用进程 PID。"
+      }
+    ],
+    "Global": false,
+    "Continuous": true,
+    "Requirements": "支持 logcat --pid 的系统（通常 Android 7+）",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/logcat"
+  },
+  {
+    "Id": "log.tag",
+    "Category": "日志与诊断",
+    "Title": "按 TAG 抓取日志",
+    "Description": "仅显示指定 TAG 的日志。",
+    "Command": "logcat -v threadtime {0}:V *:S",
+    "Parameters": [
+      {
+        "Label": "日志 TAG",
+        "Kind": "text",
+        "DefaultValue": "AndroidRuntime",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": true,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/logcat"
+  },
+  {
+    "Id": "log.clear",
+    "Category": "日志与诊断",
+    "Title": "清空日志缓冲区",
+    "Description": "清空手机的默认 logcat 日志缓冲区。",
+    "Command": "logcat -c",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将清空已有手机日志，请先保存需要保留的内容。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/logcat"
+  },
+  {
+    "Id": "log.anr",
+    "Category": "日志与诊断",
+    "Title": "最近 ANR 信息",
+    "Description": "查看系统记录的最近一次 ANR 状态；没有记录时可能为空。",
+    "Command": "shell dumpsys activity lastanr",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "log.bugreport",
+    "Category": "日志与诊断",
+    "Title": "导出完整诊断报告",
+    "Description": "导出 bugreport 到电脑目录，可能需要几分钟；报告可能包含设备和应用信息。",
+    "Command": "bugreport {0}",
+    "Parameters": [
+      {
+        "Label": "电脑保存目录",
+        "Kind": "folder",
+        "DefaultValue": "",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "perf.cpu",
+    "Category": "性能分析",
+    "Title": "CPU 使用情况",
+    "Description": "查看系统记录的近期 CPU 使用情况。",
+    "Command": "shell dumpsys cpuinfo",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "perf.top",
+    "Category": "性能分析",
+    "Title": "进程资源快照",
+    "Description": "输出一帧 CPU、内存和进程资源快照。",
+    "Command": "shell top -b -n 1",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "支持 -b/-n 的 Toybox top（现代 Android）",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "perf.memory",
+    "Category": "性能分析",
+    "Title": "系统内存概要",
+    "Description": "查看系统内存和各进程内存汇总。",
+    "Command": "shell dumpsys meminfo",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "perf.appmemory",
+    "Category": "性能分析",
+    "Title": "应用内存详情",
+    "Description": "查看运行中应用的 PSS、堆和其他内存；未运行时可能没有数据。",
+    "Command": "shell dumpsys meminfo {0}",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "PSS heap RAM 内存泄漏",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "perf.frames",
+    "Category": "性能分析",
+    "Title": "应用绘制帧统计",
+    "Description": "查看硬件加速 UI 的绘制帧耗时；不等于所有游戏或 Surface 的完整 FPS。",
+    "Command": "shell dumpsys gfxinfo {0} framestats",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 6+；应用使用系统支持的绘制路径",
+    "Confirmation": "",
+    "Keywords": "FPS 掉帧 卡顿 帧率",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "perf.frameclear",
+    "Category": "性能分析",
+    "Title": "重置应用帧统计",
+    "Description": "清空应用现有 gfxinfo 统计，便于重新采样。",
+    "Command": "shell dumpsys gfxinfo {0} reset",
+    "Parameters": [
+      {
+        "Label": "应用包名",
+        "Kind": "package",
+        "DefaultValue": "",
+        "Hint": "可点击右侧选择已安装应用，也可手动填写。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将重置该应用当前绘制统计，请先保存需要的结果。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "perf.start",
+    "Category": "性能分析",
+    "Title": "测量 Activity 启动耗时",
+    "Description": "启动 Activity 并等待结果。若应用已运行，不能据此认定为冷启动。",
+    "Command": "shell am start --user current -W -n {0}",
+    "Parameters": [
+      {
+        "Label": "Activity 组件名",
+        "Kind": "component",
+        "DefaultValue": "",
+        "Hint": "例如 com.example.app/.MainActivity"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "ThisTime TotalTime WaitTime 启动性能",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "perf.disk",
+    "Category": "性能分析",
+    "Title": "磁盘性能与空间统计",
+    "Description": "查看系统提供的磁盘统计和空间信息。",
+    "Command": "shell dumpsys diskstats",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "perf.proc",
+    "Category": "性能分析",
+    "Title": "系统内存原始信息",
+    "Description": "读取 Linux /proc/meminfo，查看内存字段。",
+    "Command": "shell cat /proc/meminfo",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.ip",
+    "Category": "网络诊断",
+    "Title": "手机 IP 地址",
+    "Description": "查看手机网卡、IP 和接口状态。",
+    "Command": "shell ip addr",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "IPv4 IPv6 wlan0 tun VPN",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.route",
+    "Category": "网络诊断",
+    "Title": "手机路由表",
+    "Description": "查看主路由表；VPN 的策略路由可能还需要 ip rule。",
+    "Command": "shell ip route",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.rules",
+    "Category": "网络诊断",
+    "Title": "手机策略路由规则",
+    "Description": "查看系统策略路由规则，辅助分析 VPN 路由。",
+    "Command": "shell ip rule",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "系统可能限制 shell 读取部分规则",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.wifi",
+    "Category": "网络诊断",
+    "Title": "Wi-Fi 诊断信息",
+    "Description": "查看 Wi-Fi 服务状态；输出较多，部分字段会因权限被隐藏。",
+    "Command": "shell dumpsys wifi",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "network.connectivity",
+    "Category": "网络诊断",
+    "Title": "网络连接与 VPN 状态",
+    "Description": "查看系统网络、VPN 和连接能力记录。",
+    "Command": "shell dumpsys connectivity",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "network.traffic",
+    "Category": "网络诊断",
+    "Title": "网络流量统计",
+    "Description": "查看系统流量统计；这是计数统计，不提供 HTTP 请求内容。",
+    "Command": "shell dumpsys netstats",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "network.dns",
+    "Category": "网络诊断",
+    "Title": "DNS 解析器状态",
+    "Description": "查看系统 DNS 解析服务状态。",
+    "Command": "shell dumpsys dnsresolver",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "Android 10+；系统提供 dnsresolver 服务",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/dumpsys"
+  },
+  {
+    "Id": "network.connect",
+    "Category": "网络诊断",
+    "Title": "连接无线 ADB",
+    "Description": "连接已经配对或开启 TCP 调试的手机地址。",
+    "Command": "connect {0}",
+    "Parameters": [
+      {
+        "Label": "IP:端口",
+        "Kind": "endpoint",
+        "DefaultValue": "192.168.1.2:5555",
+        "Hint": "使用英文冒号；IPv6 使用 [地址]:端口。"
+      }
+    ],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.disconnect",
+    "Category": "网络诊断",
+    "Title": "断开指定无线 ADB",
+    "Description": "断开填写的无线地址，不影响其他无线地址。",
+    "Command": "disconnect {0}",
+    "Parameters": [
+      {
+        "Label": "IP:端口",
+        "Kind": "endpoint",
+        "DefaultValue": "192.168.1.2:5555",
+        "Hint": "使用英文冒号；IPv6 使用 [地址]:端口。"
+      }
+    ],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将断开填写的无线 ADB 地址，对应投屏和任务可能中断。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.mdns",
+    "Category": "网络诊断",
+    "Title": "发现无线 ADB 服务",
+    "Description": "查看电脑通过 mDNS 发现的无线调试服务。",
+    "Command": "mdns services",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.forward",
+    "Category": "网络诊断",
+    "Title": "电脑到手机端口转发",
+    "Description": "将电脑端口转发到所选手机端口。",
+    "Command": "forward tcp:{0} tcp:{1}",
+    "Parameters": [
+      {
+        "Label": "电脑端口",
+        "Kind": "port",
+        "DefaultValue": "8080",
+        "Hint": "范围 1–65535。"
+      },
+      {
+        "Label": "手机端口",
+        "Kind": "port",
+        "DefaultValue": "8080",
+        "Hint": "范围 1–65535。"
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.forwardlist",
+    "Category": "网络诊断",
+    "Title": "查看全部正向转发",
+    "Description": "列出电脑上的全部 forward 规则，包含各设备序列号。",
+    "Command": "forward --list",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.forwardremove",
+    "Category": "网络诊断",
+    "Title": "移除指定正向转发",
+    "Description": "移除所选设备对应电脑端口的正向转发规则。",
+    "Command": "forward --remove tcp:{0}",
+    "Parameters": [
+      {
+        "Label": "电脑端口",
+        "Kind": "port",
+        "DefaultValue": "8080",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将移除指定正向端口转发，依赖它的调试连接可能中断。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.reverse",
+    "Category": "网络诊断",
+    "Title": "手机到电脑端口转发",
+    "Description": "将手机端口转发到电脑端口，常用于本地开发服务。",
+    "Command": "reverse tcp:{0} tcp:{1}",
+    "Parameters": [
+      {
+        "Label": "手机端口",
+        "Kind": "port",
+        "DefaultValue": "8080",
+        "Hint": ""
+      },
+      {
+        "Label": "电脑端口",
+        "Kind": "port",
+        "DefaultValue": "8080",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.reverselist",
+    "Category": "网络诊断",
+    "Title": "查看手机反向转发",
+    "Description": "查看所选手机的 reverse 转发规则。",
+    "Command": "reverse --list",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.reverseremove",
+    "Category": "网络诊断",
+    "Title": "移除指定反向转发",
+    "Description": "移除所选手机指定端口的 reverse 规则。",
+    "Command": "reverse --remove tcp:{0}",
+    "Parameters": [
+      {
+        "Label": "手机端口",
+        "Kind": "port",
+        "DefaultValue": "8080",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将移除指定反向端口转发，依赖它的抓包或开发服务可能中断。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.proxy",
+    "Category": "网络诊断",
+    "Title": "查询旧版代理字段",
+    "Description": "查看兼容旧版的 http_proxy 字段；空值不代表没有生效的代理，请结合全局主机、端口与手机代理设置检查。",
+    "Command": "shell settings get global http_proxy",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.proxyhost",
+    "Category": "网络诊断",
+    "Title": "查询全局代理主机",
+    "Description": "只读查看手动全局 HTTP 代理的主机字段。PAC 和各 Wi-Fi 的代理可能另有配置；此预设不修改正在运行的抓包设置。",
+    "Command": "shell settings get global global_http_proxy_host",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "network.proxyport",
+    "Category": "网络诊断",
+    "Title": "查询全局代理端口",
+    "Description": "只读查看手动全局 HTTP 代理的端口字段。PAC 和各 Wi-Fi 的代理可能另有配置；此预设不修改正在运行的抓包设置。",
+    "Command": "shell settings get global global_http_proxy_port",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.help",
+    "Category": "ADB 服务",
+    "Title": "ADB 命令帮助",
+    "Description": "显示当前附带 ADB 实际支持的命令。",
+    "Command": "help",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.version",
+    "Category": "ADB 服务",
+    "Title": "ADB 工具版本",
+    "Description": "查看当前附带的 ADB 版本。",
+    "Command": "version",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.start",
+    "Category": "ADB 服务",
+    "Title": "启动 ADB 服务",
+    "Description": "启动电脑上的 ADB 服务。完整重启可以使用工具箱中的“重启 ADB 服务”。",
+    "Command": "start-server",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.kill",
+    "Category": "ADB 服务",
+    "Title": "停止 ADB 服务",
+    "Description": "停止电脑上的共享 ADB 服务。设备自动扫描可能随后重新启动服务；完整重启可使用工具箱中的重启按钮。",
+    "Command": "kill-server",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将停止电脑上的共享 ADB 服务，所有手机连接、投屏和调试任务可能中断。",
+    "Keywords": "重启 kill-service kill-server",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.status",
+    "Category": "ADB 服务",
+    "Title": "ADB 服务信息",
+    "Description": "查看电脑 ADB 服务信息；旧版 ADB 可能不支持。",
+    "Command": "server-status",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "支持 server-status 的 ADB 工具版本",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.features",
+    "Category": "ADB 服务",
+    "Title": "ADB 主机能力",
+    "Description": "列出电脑 ADB 服务支持的能力。",
+    "Command": "host-features",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.track",
+    "Category": "ADB 服务",
+    "Title": "实时观察连接变化",
+    "Description": "持续输出设备连接状态；点击停止仅结束观察客户端。",
+    "Command": "track-devices -l",
+    "Parameters": [],
+    "Global": true,
+    "Continuous": true,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.tcpip",
+    "Category": "ADB 服务",
+    "Title": "开启 TCP 无线调试",
+    "Description": "通过已有连接让设备监听指定 TCP 端口；不同于 Android 无线调试的 TLS 配对端口。",
+    "Command": "tcpip {0}",
+    "Parameters": [
+      {
+        "Label": "监听端口",
+        "Kind": "port",
+        "DefaultValue": "5555",
+        "Hint": ""
+      }
+    ],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将切换设备 ADB 为 TCP 监听，连接和投屏可能中断；请在可信局域网使用。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.usb",
+    "Category": "ADB 服务",
+    "Title": "恢复 USB 调试模式",
+    "Description": "将所选设备的 ADB 切回 USB 模式。",
+    "Command": "usb",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "已授权 ADB；实际支持以设备系统为准",
+    "Confirmation": "将关闭该调试 TCP 模式并切回 USB，当前无线连接和投屏可能中断。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.root",
+    "Category": "ADB 服务",
+    "Title": "以 Root 重启 adbd",
+    "Description": "请求以 root 身份重启 adbd；普通量产系统通常拒绝。",
+    "Command": "root",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "userdebug/eng 系统或允许 adb root 的调试固件；不保证量产机支持",
+    "Confirmation": "将尝试以 root 身份重启手机 adbd，现有调试连接可能中断。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.unroot",
+    "Category": "ADB 服务",
+    "Title": "恢复非 Root adbd",
+    "Description": "请求以普通身份重启 adbd。",
+    "Command": "unroot",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "支持 adb unroot 的设备固件",
+    "Confirmation": "将以非 root 身份重启手机 adbd，现有调试连接可能中断。",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  },
+  {
+    "Id": "adb.shellhelp",
+    "Category": "ADB 服务",
+    "Title": "Android Shell 工具列表",
+    "Description": "列出手机内置 Toybox 命令；可按需手动输入到控制台。",
+    "Command": "shell toybox --long",
+    "Parameters": [],
+    "Global": false,
+    "Continuous": false,
+    "Requirements": "设备内置 Toybox（现代 Android）",
+    "Confirmation": "",
+    "Keywords": "",
+    "Source": "https://developer.android.com/tools/adb"
+  }
+]
