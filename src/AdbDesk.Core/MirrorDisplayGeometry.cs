@@ -23,6 +23,51 @@ public sealed record MirrorCrop(int Width, int Height, int X, int Y)
 
 public static partial class MirrorDisplayGeometry
 {
+    public static MirrorCrop? CreateCrop(MirrorDisplaySize natural, MirrorDisplaySize current,
+        int targetWidth, int targetHeight, MirrorDisplaySettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        settings.Validate();
+        if (settings.Mode == MirrorScaleMode.Complete) return null;
+        ArgumentNullException.ThrowIfNull(natural);
+        ArgumentNullException.ThrowIfNull(current);
+        if (!ValidSize(targetWidth, targetHeight)) throw new ArgumentOutOfRangeException(nameof(targetWidth));
+        if (!ValidSize(natural.Width, natural.Height) || !ValidSize(current.Width, current.Height))
+            throw new InvalidDataException("手机屏幕尺寸无效。");
+        var region = settings.EffectiveRegion;
+        if (region != MirrorCropRegion.Full && settings.SourceSize != current)
+            throw new InvalidDataException("手机方向或分辨率已变化，请打开显示设置重新选择裁剪区域。");
+        if (natural.Width == natural.Height && (targetWidth != targetHeight || region != MirrorCropRegion.Full))
+            throw new InvalidDataException("方形手机屏幕无法仅凭尺寸判断旋转方向，请选择完整显示。");
+        var transposed = natural != current && natural.Width == current.Height && natural.Height == current.Width;
+        if (natural != current && !transposed) throw new InvalidDataException("手机分辨率在读取期间发生变化，请重试。");
+        var x = (int)Math.Floor(current.Width * region.Left);
+        var y = (int)Math.Floor(current.Height * region.Top);
+        var width = (int)Math.Floor(current.Width * region.Right) - x;
+        var height = (int)Math.Floor(current.Height * region.Bottom) - y;
+        var wide = (long)width * targetHeight > (long)height * targetWidth;
+        if (wide && settings.Mode is MirrorScaleMode.Fill or MirrorScaleMode.FillHeight)
+        {
+            var reduced = (int)((long)height * targetWidth / targetHeight);
+            reduced -= reduced % 2;
+            x += (width - reduced) / 2;
+            width = reduced;
+        }
+        else if (!wide && settings.Mode is MirrorScaleMode.Fill or MirrorScaleMode.FillWidth)
+        {
+            var reduced = (int)((long)width * targetHeight / targetWidth);
+            reduced -= reduced % 2;
+            y += (height - reduced) / 2;
+            height = reduced;
+        }
+        width -= width % 2;
+        height -= height % 2;
+        if (width < 2 || height < 2) throw new InvalidDataException("裁剪区域过小，请扩大选区。");
+        // scrcpy v4.1 VideoFilter.addCrop transposes all four edges for odd rotations.
+        // It does not rotate/mirror the rectangle around the natural screen bounds.
+        return transposed ? new(height, width, y, x) : new(width, height, x, y);
+    }
+
     public static MirrorDisplaySize ParseNaturalSize(string output)
     {
         var matches = SizeRegex().Matches(output ?? "");

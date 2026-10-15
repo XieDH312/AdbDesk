@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>AdbDesk</AssemblyName>
-    <Version>1.0.0-beta.8</Version>
-    <VersionCode>10008</VersionCode>
+    <Version>1.0.0-beta.9</Version>
+    <VersionCode>10009</VersionCode>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -24,6 +24,7 @@
     <Content Include="Assets\network_capture.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\adb-console.md" Link="docs\adb-console.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\updates.md" Link="docs\updates.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\mirror-display.md" Link="docs\mirror-display.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\app-management.md" Link="docs\app-management.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\network-capture.md" Link="docs\network-capture.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\licenses\mitmproxy-LICENSE.txt" Link="licenses\mitmproxy-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

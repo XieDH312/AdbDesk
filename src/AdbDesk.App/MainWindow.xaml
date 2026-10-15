@@ -151,15 +151,17 @@
                         <Button Content="刷新设备" Click="RefreshButton_Click" Margin="8,0,0,0" />
                     </StackPanel>
                     <WrapPanel Grid.Row="1" Grid.ColumnSpan="5" Margin="0,10,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="显示方式" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="默认显示" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                         <ComboBox x:Name="MirrorFitComboBox" Width="220" Margin="10,0,18,0" SelectedIndex="0"
-                                  ToolTip="裁剪保持比例，会隐藏边缘内容；先将手机转到观看方向，改变方向后停止并重开投屏">
+                                  ToolTip="用于没有独立显示设置的设备。裁剪保持比例，会隐藏边缘内容；可在设备行或投屏顶部单独设置">
                             <ComboBoxItem Content="完整显示 · 保持比例" Tag="complete" />
                             <ComboBoxItem Content="裁剪铺满 · 保持比例" Tag="crop" />
+                            <ComboBoxItem Content="上下铺满 · 保持比例" Tag="height" />
+                            <ComboBoxItem Content="左右铺满 · 保持比例" Tag="width" />
                         </ComboBox>
                         <CheckBox x:Name="MirrorFullScreenCheckBox" Content="启动时全屏" VerticalAlignment="Center" Margin="0,0,20,0"
                                   ToolTip="在 AdbDesk 所在的显示器全屏打开；F11 或左 Alt+F 切换全屏。修改对新打开的投屏生效" />
-                        <TextBlock Text="F11 切换全屏 · 修改后重开投屏" FontSize="11" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="F11 全屏 · 全屏时移到顶部边缘展开工具栏" FontSize="11" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                     </WrapPanel>
                 </Grid>
             </Border>
@@ -232,6 +234,9 @@
                                                             <TextBlock Text="{Binding StateText}" Foreground="{Binding StateForeground}"
                                                                        FontSize="12" FontWeight="SemiBold" />
                                                         </Border>
+                                                        <Button Content="显示设置" IsEnabled="{Binding CanCaptureAction}"
+                                                                Style="{StaticResource CompactButtonStyle}" Click="MirrorDisplayButton_Click" Margin="0,0,8,0"
+                                                                ToolTip="完整显示、上下铺满、左右铺满、自定义裁剪；单独记住这台设备" />
                                                         <Button Content="{Binding CaptureActionText}" IsEnabled="{Binding CanCaptureAction}"
                                                                 Style="{StaticResource CompactButtonStyle}" Click="ScreenshotButton_Click" Margin="0,0,8,0"
                                                                 ToolTip="截取这台手机的当前屏幕，无需启动投屏" />
