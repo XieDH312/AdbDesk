@@ -22,6 +22,17 @@ public sealed class MirrorService : IDisposable
         }
     }
 
+    // Resolve only the owned scrcpy process, never another window with a matching title.
+    public IntPtr GetWindowHandle(string serial)
+    {
+        lock (_sync)
+        {
+            if (!_sessions.TryGetValue(serial, out var session) || !session.IsRunning) return IntPtr.Zero;
+            try { session.Process.Refresh(); return session.Process.MainWindowHandle; }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { return IntPtr.Zero; }
+        }
+    }
+
     public void Start(DeviceInfo device, MirrorOptions options)
     {
         ArgumentNullException.ThrowIfNull(device);

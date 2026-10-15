@@ -12,6 +12,11 @@ if (Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL") == "1")
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("mirror toolbar docks outside the phone frame or uses hidden edge reveal", MirrorToolbarPlacementTests.PlacementAsync),
+    ("mirror toolbar auto-hide preserves hover grace and owned help without first-frame overlays", MirrorToolbarPlacementTests.VisibilityAsync),
+    ("mirror screen buttons target one owned window and release modifiers on failed submission", MirrorScreenControlTests.CommandsAsync),
+    ("mirror height width and custom display preserve aspect offsets and reject stale selections", MirrorDisplayTests.SettingsGeometryAsync),
+    ("mirror display preferences preserve independent device overrides across restart and deletion", MirrorDisplayTests.SettingsStoreAsync),
     ("mirror fill preserves aspect ratio and converts current orientation into natural crop coordinates", MirrorDisplayTests.GeometryAsync),
     ("mirror fullscreen and crop arguments preserve device scope and cancel geometry reads", MirrorDisplayTests.ArgumentsAsync),
     ("phone Wi-Fi addresses remain separate from VPN interfaces", DeviceNetworkTests.AddressesAsync),

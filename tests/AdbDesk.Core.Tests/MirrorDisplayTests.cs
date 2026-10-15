@@ -3,6 +3,61 @@ using AdbDesk.Core;
 
 internal static class MirrorDisplayTests
 {
+    // Catches swapping width/height fill, losing asymmetric selection offsets, or applying stale crops.
+    internal static Task SettingsGeometryAsync()
+    {
+        var natural = new MirrorDisplaySize(1080, 2400);
+        var landscape = new MirrorDisplaySize(2400, 1080);
+        Equal(new MirrorCrop(1080, 1920, 0, 240), MirrorDisplayGeometry.CreateCrop(natural, landscape, 1920, 1080,
+            new(MirrorScaleMode.FillHeight)), "height fill removes horizontal overflow");
+        Equal(new MirrorCrop(1080, 2400, 0, 0), MirrorDisplayGeometry.CreateCrop(natural, landscape, 1920, 1080,
+            new(MirrorScaleMode.FillWidth)), "width fill retains a wide image with vertical letterboxing");
+        Equal(new MirrorCrop(1080, 2400, 0, 0), MirrorDisplayGeometry.CreateCrop(natural, natural, 1920, 1080,
+            new(MirrorScaleMode.FillHeight)), "height fill retains a tall image with side bars");
+        Equal(new MirrorCrop(1080, 606, 0, 897), MirrorDisplayGeometry.CreateCrop(natural, natural, 1920, 1080,
+            new(MirrorScaleMode.FillWidth)), "width fill removes vertical overflow");
+        var custom = new MirrorDisplaySettings(MirrorScaleMode.Custom, true, new(.1, .2, .9, .8), landscape);
+        Equal(new MirrorCrop(648, 1920, 216, 240), MirrorDisplayGeometry.CreateCrop(natural, landscape, 1920, 1080, custom),
+            "asymmetric landscape crop preserves screenshot coordinates using the upstream transpose rule");
+        Equal(new MirrorCrop(648, 1152, 216, 624), MirrorDisplayGeometry.CreateCrop(natural, landscape, 1920, 1080, custom with { Mode = MirrorScaleMode.FillHeight }),
+            "manual black bar removal is applied before aspect-preserving height fill");
+        Equal<MirrorCrop?>(null, MirrorDisplayGeometry.CreateCrop(natural, landscape, 1920, 1080, new()), "complete view does not crop");
+        Throws<InvalidDataException>(() => MirrorDisplayGeometry.CreateCrop(natural, natural, 1920, 1080, custom));
+        Throws<ArgumentOutOfRangeException>(() => new MirrorCropRegion(double.NaN, 0, 1, 1).Validate());
+        Throws<ArgumentOutOfRangeException>(() => new MirrorCropRegion(.9, 0, .1, 1).Validate());
+        Throws<ArgumentOutOfRangeException>(() => new MirrorDisplaySettings((MirrorScaleMode)999).Validate());
+        Throws<InvalidDataException>(() => MirrorDisplayGeometry.CreateCrop(new(1000, 1000), new(1000, 1000), 1000, 1000,
+            new(MirrorScaleMode.Custom, Region: new(.1, .2, .9, .8), SourceSize: new(1000, 1000))));
+        return Task.CompletedTask;
+    }
+
+    // Catches overwriting another device, keeping deleted overrides, or trusting damaged settings.
+    internal static Task SettingsStoreAsync()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "AdbDesk-display-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "display.json");
+            var store = new MirrorDisplaySettingsStore(path);
+            var first = new MirrorDisplaySettings(MirrorScaleMode.FillWidth, true);
+            var second = new MirrorDisplaySettings(MirrorScaleMode.Custom, false, new(.1, .2, .9, .8), new(2400, 1080));
+            store.Save("phone-a", first);
+            store.Save("phone-b", second);
+            Equal(first, new MirrorDisplaySettingsStore(path).Load()["phone-a"], "first device survives another save");
+            Equal(second, store.Load()["phone-b"], "custom region survives restart");
+            store.Remove("phone-a");
+            Equal(false, store.Load().ContainsKey("phone-a"), "removed device does not reappear");
+            Equal(second, store.Load()["phone-b"], "removal preserves other device");
+            File.WriteAllText(path, "{\"phone-a\":{\"Mode\":999},\"phone-b\":null}");
+            Equal(0, store.Load().Count, "invalid modes and null entries are discarded");
+            File.WriteAllText(path, "broken json");
+            Equal(0, store.Load().Count, "corrupt settings fall back safely");
+        }
+        finally { Directory.Delete(directory, true); }
+        return Task.CompletedTask;
+    }
+
     // Catches cropping in current landscape coordinates instead of scrcpy's natural coordinates.
     internal static Task GeometryAsync()
     {

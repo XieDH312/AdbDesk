@@ -7,5 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/AdbDesk.Core/AdbDesk.Core.csproj" />
+    <Compile Include="../../src/AdbDesk.App/MirrorScreenControl.cs" Link="MirrorScreenControl.cs" />
+    <Compile Include="../../src/AdbDesk.App/MirrorToolbarPlacement.cs" Link="MirrorToolbarPlacement.cs" />
   </ItemGroup>
 </Project>

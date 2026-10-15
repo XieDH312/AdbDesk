@@ -569,7 +569,7 @@ public partial class MainWindow : Window
         return (summaryText, $"{summaryText}{endpointText}", false);
     }
 
-    private async void StartMirror(DeviceRow row)
+    private async void StartMirror(DeviceRow row, MirrorTargetDisplay? targetOverride = null, bool replaceExisting = false)
     {
         if (_isClosing || !_servicesReady || _mirrorService is not { } mirrors || !row.IsReady)
         {
@@ -583,7 +583,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_mirrorStarting.ContainsKey(row.Serial) || mirrors.IsRunning(row.Serial)) return;
+        if (_mirrorStarting.ContainsKey(row.Serial) || (mirrors.IsRunning(row.Serial) && !replaceExisting)) return;
         using var source = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         var device = row.Device;
         _mirrorStarting.Add(row.Serial, source);
@@ -592,10 +592,12 @@ public partial class MainWindow : Window
         try
         {
             var options = GetMirrorOptions();
-            var cropToFill = (MirrorFitComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() == "crop";
-            if (cropToFill || options.FullScreen)
+            var displaySettings = GetDisplaySettings(row);
+            options = options with { FullScreen = displaySettings.FullScreen };
+            var cropToFill = displaySettings.Mode != MirrorScaleMode.Complete;
+            if (cropToFill || options.FullScreen || targetOverride is not null)
             {
-                var display = GetMirrorTargetDisplay();
+                var display = targetOverride ?? GetMirrorTargetDisplay();
                 options = options with
                 {
                     WindowX = display.Left + display.Width / 8,
@@ -611,12 +613,14 @@ public partial class MainWindow : Window
                     var natural = await adb.GetDisplaySizeAsync(device, source.Token);
                     var png = await screenshots.CaptureAsync(device.Serial, source.Token);
                     var current = MirrorDisplayGeometry.ReadScreenshotSize(png);
-                    options = options with { Crop = MirrorDisplayGeometry.CropToFit(natural, current, display.Width, display.Height) };
+                    options = options with { Crop = MirrorDisplayGeometry.CreateCrop(natural, current, display.Width, display.Height, displaySettings) };
                 }
             }
             source.Token.ThrowIfCancellationRequested();
             if (_isClosing || !ReferenceEquals(_mirrorService, mirrors) || !Devices.Contains(row) || !row.IsReady ||
                 row.Device.TransportId != device.TransportId) return;
+            // Keep the old mirror alive until all new geometry and device checks succeed.
+            if (replaceExisting) { CloseMirrorToolbar(row.Serial); mirrors.Stop(row.Serial); }
             mirrors.Start(row.Device, options);
             if (options.Crop is { } crop) AppendMirrorLog(row.Serial, $"保持比例裁剪：{crop.ToScrcpyArgument()}；改变手机方向后请停止并重开投屏。");
             SetStatus($"正在启动 {row.DisplayName} 的独立投屏窗口", StatusKind.Working);
@@ -655,7 +659,9 @@ public partial class MainWindow : Window
             var row = Devices.FirstOrDefault(device => string.Equals(device.Serial, update.Serial, StringComparison.Ordinal));
             if (row is not null)
             {
-                row.IsMirroring = update.IsRunning;
+                row.IsMirroring = _mirrorService?.IsRunning(update.Serial) == true;
+                if (row.IsMirroring) EnsureMirrorToolbar(row);
+                else CloseMirrorToolbar(update.Serial);
             }
 
             AppendMirrorLog(update.Serial, update.Message);
@@ -888,20 +894,7 @@ public partial class MainWindow : Window
 
     private void ClearLogButton_Click(object sender, RoutedEventArgs e) => MirrorLogs.Clear();
 
-    private void HelpButton_Click(object sender, RoutedEventArgs e)
-    {
-        MessageBox.Show(
-            this,
-            "1. 在手机上开启开发者选项和 USB 调试。\n\n" +
-            "2. 首次连接时，请解锁手机并确认“允许 USB 调试”。显示“等待授权”时可重新插拔数据线。\n\n" +
-            "3. 部分品牌安装 APK 时，还需在手机上确认“通过 USB 安装”或类似权限。\n\n" +
-            "4. 主界面 APK 安装结果显示在底部运行日志中，安装进行时可从“取消安装”菜单取消指定任务。投屏窗口由 scrcpy 独立打开，可直接拖入 APK；该安装结果也显示在运行日志中，但不能从主界面取消。\n\n" +
-            "5. 开启无线要求手机与电脑位于同一局域网，电脑可以使用网线。切换连接方式会重启手机 ADB 服务，投屏可能短暂断开；请在结果确认前保持 USB 数据线连接。\n\n" +
-            "6. ADB 控制台支持常用命令、自定义命令、日志及历史。程序不会自动停止系统 ADB 服务；只有在控制台明确执行 kill-server 才会停止共享服务。",
-            "连接与授权帮助",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-    }
+    private void HelpButton_Click(object sender, RoutedEventArgs e) => OpenUsageHelp();
 
     private static bool TryGetSingleApk(IDataObject data, out string apkPath)
     {
@@ -997,6 +990,7 @@ public partial class MainWindow : Window
 
     private void DisposeServices()
     {
+        DisposeMirrorDisplay();
         foreach (var serial in _mirrorStarting.Keys.ToArray()) CancelMirrorStart(serial);
         AdbConsole.Configure(null);
         AppToolbox.Configure(null);

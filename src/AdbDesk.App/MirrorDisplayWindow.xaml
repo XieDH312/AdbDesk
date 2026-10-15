@@ -1,0 +1,75 @@
+<Window x:Class="AdbDesk.App.MirrorDisplayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="投屏显示设置 · AdbDesk" Width="1040" Height="760" MinWidth="880" MinHeight="650"
+        WindowStartupLocation="CenterOwner" Icon="Assets/AdbDesk.ico" Loaded="Window_Loaded">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,16">
+            <TextBlock x:Name="DeviceText" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Text="拖动四角缩放，拖动选区移动；按住 Shift 拖动新建选区，也可填写四边裁剪比例。" Foreground="{StaticResource MutedBrush}" Margin="0,6,0,0"/>
+        </StackPanel>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="310"/></Grid.ColumnDefinitions>
+            <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Border Background="#182230" CornerRadius="10" ClipToBounds="True">
+                    <Canvas x:Name="PreviewCanvas" Background="Transparent" ClipToBounds="True" SizeChanged="Preview_SizeChanged"
+                            MouseLeftButtonDown="Preview_MouseDown" MouseMove="Preview_MouseMove" MouseLeftButtonUp="Preview_MouseUp"
+                            LostMouseCapture="Preview_LostCapture" Cursor="Cross">
+                        <Image x:Name="SourceImage" IsHitTestVisible="False" Stretch="Fill"/>
+                        <Path x:Name="ShadePath" Fill="#9A000000" IsHitTestVisible="False"/>
+                        <Rectangle x:Name="SelectionOutline" Stroke="#60A5FA" StrokeThickness="2" IsHitTestVisible="False"/>
+                        <Rectangle x:Name="CornerTL" Width="9" Height="9" Fill="White" Stroke="#2563EB" IsHitTestVisible="False"/>
+                        <Rectangle x:Name="CornerTR" Width="9" Height="9" Fill="White" Stroke="#2563EB" IsHitTestVisible="False"/>
+                        <Rectangle x:Name="CornerBL" Width="9" Height="9" Fill="White" Stroke="#2563EB" IsHitTestVisible="False"/>
+                        <Rectangle x:Name="CornerBR" Width="9" Height="9" Fill="White" Stroke="#2563EB" IsHitTestVisible="False"/>
+                    </Canvas>
+                </Border>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button x:Name="RefreshFrameButton" Content="刷新手机画面" Click="Refresh_Click" Padding="12,0"/>
+                    <Button Content="居中选区" Click="Center_Click" Margin="8,0,0,0" Padding="12,0"/>
+                    <Button Content="还原选区" Click="Reset_Click" Margin="8,0,0,0" Padding="12,0"/>
+                </StackPanel>
+            </Grid>
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="显示方式" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="ModeComboBox" Margin="0,8,0,0" SelectionChanged="Mode_Changed">
+                        <ComboBoxItem Content="完整显示 · 保留全部内容"/>
+                        <ComboBoxItem Content="裁剪铺满 · 同时填满宽高"/>
+                        <ComboBoxItem Content="上下铺满 · 按高度填满"/>
+                        <ComboBoxItem Content="左右铺满 · 按宽度填满"/>
+                        <ComboBoxItem Content="自定义裁剪 · 保留选区"/>
+                    </ComboBox>
+                    <TextBlock x:Name="ModeHintText" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,8,0,14"/>
+                    <CheckBox x:Name="FullScreenCheckBox" Content="全屏显示" Margin="0,0,0,14"/>
+                    <TextBlock Text="裁掉黑边（%）" FontWeight="SemiBold"/>
+                    <UniformGrid Columns="2" Margin="0,6,0,8">
+                        <StackPanel Margin="0,0,10,8"><TextBlock Text="左侧"/><TextBox x:Name="LeftInput" Text="0" TextChanged="Edges_Changed" Padding="7"/></StackPanel>
+                        <StackPanel Margin="0,0,0,8"><TextBlock Text="右侧"/><TextBox x:Name="RightInput" Text="0" TextChanged="Edges_Changed" Padding="7"/></StackPanel>
+                        <StackPanel Margin="0,0,10,0"><TextBlock Text="顶部"/><TextBox x:Name="TopInput" Text="0" TextChanged="Edges_Changed" Padding="7"/></StackPanel>
+                        <StackPanel><TextBlock Text="底部"/><TextBox x:Name="BottomInput" Text="0" TextChanged="Edges_Changed" Padding="7"/></StackPanel>
+                    </UniformGrid>
+                    <TextBlock x:Name="EdgeErrorText" Foreground="#B42318" FontSize="12" Margin="0,0,0,10"/>
+                    <TextBlock Text="电脑画面预览" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <Border x:Name="OutputBorder" Background="Black" Height="170" ClipToBounds="True">
+                        <Image x:Name="OutputImage" Stretch="Uniform"/>
+                    </Border>
+                    <TextBlock x:Name="OutputDetailsText" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,6,0,12"/>
+                    <CheckBox x:Name="RememberCheckBox" Content="记住此设备的设置" IsChecked="True"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+        <TextBlock x:Name="StatusText" Grid.Row="2" Foreground="{StaticResource MutedBrush}" Margin="0,12,0,12"
+                   Text="正在读取手机完整画面…"/>
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="保持比例。应用时会短暂重开这台设备的投屏；改变手机方向后请重新设置。" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" Margin="0,0,15,0"/>
+            <Button Grid.Column="1" Content="取消" IsCancel="True" MinWidth="76"/>
+            <Button x:Name="ApplyButton" Grid.Column="2" Content="应用设置" IsDefault="True" Style="{StaticResource PrimaryButtonStyle}" Click="Apply_Click" Margin="8,0,0,0"/>
+        </Grid>
+    </Grid>
+</Window>
