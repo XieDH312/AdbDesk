@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
+        InitializeMirrorPreferences();
         InitializeNetworkStatus();
         InitializeConnectionHistory();
         AdbConsole.RefreshRequested += async (_, _) => await RefreshDevicesAsync();
