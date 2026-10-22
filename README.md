@@ -8,7 +8,7 @@ Windows 10/11 x64 桌面工具。设备列表自动刷新，每台手机独立�
 
 v1.0.0-beta.2 起支持应用内更新：右下角「检查更新」，启动时后台检查一次，确认后下载、验证签名并重启替换。首次请完整解压新版便携包；旧版 beta.1 需手动更新一次。发布流程、设置及故障恢复见 [更新说明](docs/updates.md)。
 
-v1.0.0-beta.10（versionCode 10010）新增主界面投屏质量、音频、默认显示和启动全屏的自动记忆；更新诊断隐藏编译电脑的完整源码目录，保留类名、方法名、文件名和行号。保留独立设备显示设置、上下／左右铺满、自定义裁剪、熄屏／亮屏、外侧停靠工具栏及已有 ADB／网络抓包功能；旧版可开启“接收测试版本”后更新，详见[显示设置说明](docs/mirror-display.md)。
+v1.0.0-beta.11（versionCode 10011）增强“工具箱 → 应用管理”：显示应用名称并支持名称／包名搜索，补充版本、安装时间、SDK、权限详情、手机应用设置及日志采集联动。名称复用现有 scrcpy 读取，无需安装辅助 App；当前仅为 Android 用户 0 的已启用且有启动入口的应用补充名称，其他应用保留包名，暂不读取图标。保留已有投屏、设置记忆、ADB 和网络抓包功能；旧版开启“接收测试版本”后可更新，详见[应用管理说明](docs/app-management.md)和[本版说明](docs/releases/v1.0.0-beta.11.md)。
 
 源码同步于 [GitHub](https://github.com/XieDH312/AdbDesk) 和 [Gitee](https://gitee.com/xiedh/AdbTools)，便携包及更新附件发布在 [GitHub Releases](https://github.com/XieDH312/AdbDesk/releases)。直接使用请下载 `AdbDesk-*-win-x64.zip`；Source code 压缩包需要自行构建。
 

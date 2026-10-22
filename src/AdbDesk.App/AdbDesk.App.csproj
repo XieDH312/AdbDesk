@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>AdbDesk</AssemblyName>
-    <Version>1.0.0-beta.10</Version>
-    <VersionCode>10010</VersionCode>
+    <Version>1.0.0-beta.11</Version>
+    <VersionCode>10011</VersionCode>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
