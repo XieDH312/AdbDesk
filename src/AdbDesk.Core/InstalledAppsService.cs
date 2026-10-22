@@ -6,12 +6,59 @@ namespace AdbDesk.Core;
 
 public sealed record InstalledApp(string PackageName, int UserId, long VersionCode, bool IsSystem, bool IsEnabled)
 {
+    public string? Name { get; init; }
+    public string NameText => string.IsNullOrWhiteSpace(Name) ? "未读取" : Name;
     public string Kind => IsSystem ? "系统" : "第三方";
     public string EnabledState => IsEnabled ? "已启用" : "已停用";
 }
 
 public sealed record InstalledAppsSnapshot(int UserId, IReadOnlyList<InstalledApp> Apps, DateTimeOffset CapturedAt);
-public sealed record InstalledAppDetails(string? VersionName, long? VersionCode, IReadOnlyList<string> ApkPaths, string RawDetails);
+public sealed record InstalledAppPermission(string Name, bool IsRequested, bool? InstallGranted, bool? RuntimeGranted)
+{
+    public string GrantState => $"安装：{GrantText(InstallGranted)}；运行时：{GrantText(RuntimeGranted)}";
+    private static string GrantText(bool? value) => value switch { true => "已授予", false => "未授予", null => "未知" };
+}
+
+public sealed record InstalledAppDetails(string? VersionName, long? VersionCode, IReadOnlyList<string> ApkPaths, string RawDetails)
+{
+    public int? MinSdk { get; init; }
+    public int? TargetSdk { get; init; }
+    public string? FirstInstallTime { get; init; }
+    public bool FirstInstallTimeIsUserScoped { get; init; }
+    public string? LastUpdateTime { get; init; }
+    public bool RequestedPermissionsAvailable { get; init; }
+    public IReadOnlyList<InstalledAppPermission> Permissions { get; init; } = [];
+
+    public string ToSummary(InstalledApp app)
+    {
+        var text = new StringBuilder()
+            .AppendLine($"应用名称：{app.NameText}")
+            .AppendLine($"包名：{app.PackageName}")
+            .AppendLine($"Android 用户：{app.UserId}")
+            .AppendLine($"应用类型：{app.Kind}")
+            .AppendLine($"启用状态：{app.EnabledState}")
+            .AppendLine($"版本名称：{Value(VersionName)}")
+            .AppendLine($"版本代码：{Value(VersionCode?.ToString(CultureInfo.InvariantCulture))}")
+            .AppendLine($"最低 SDK：{Value(MinSdk?.ToString(CultureInfo.InvariantCulture))}")
+            .AppendLine($"目标 SDK：{Value(TargetSdk?.ToString(CultureInfo.InvariantCulture))}")
+            .AppendLine($"首次安装时间（{(FirstInstallTimeIsUserScoped ? "当前用户" : "包级") }）：{Value(FirstInstallTime)}")
+            .AppendLine($"最后更新时间：{Value(LastUpdateTime)}")
+            .AppendLine("APK 路径：");
+        if (ApkPaths.Count == 0) text.AppendLine("  未知（系统未提供）");
+        else foreach (var path in ApkPaths) text.AppendLine("  " + path);
+        text.AppendLine($"请求权限：{(RequestedPermissionsAvailable ? Permissions.Count(p => p.IsRequested).ToString(CultureInfo.InvariantCulture) + " 项" : "未知（系统未提供完整列表）")}")
+            .AppendLine($"权限状态（运行时仅 Android 用户 {app.UserId}；未知不表示未授予）：");
+        if (Permissions.Count == 0) text.AppendLine(RequestedPermissionsAvailable ? "  未列出权限" : "  未知（系统未提供）");
+        else foreach (var permission in Permissions)
+        {
+            var requested = permission.IsRequested ? "已请求" : RequestedPermissionsAvailable ? "未列为请求" : "请求状态未知";
+            text.AppendLine($"  {permission.Name} — {requested}；{permission.GrantState}");
+        }
+        return text.ToString().TrimEnd();
+    }
+
+    private static string Value(string? value) => string.IsNullOrWhiteSpace(value) ? "未知（系统未提供）" : value;
+}
 
 /// <summary>Installed packages for a fixed device and its explicitly identified Android user.</summary>
 public sealed class InstalledAppsService
@@ -76,13 +123,9 @@ public sealed class InstalledAppsService
         // dumpsys package exposes global package metadata and has no portable --user option.
         // Installation is checked above using pm path --user; raw output is labelled in the UI.
         var raw = await RunAsync($"shell dumpsys package {app.PackageName}", serial, token).ConfigureAwait(false);
-        var block = Regex.Match(raw, @"(?ms)^[ \t]*Package \[" + Regex.Escape(app.PackageName) + @"\][^\r\n]*.*?(?=^[ \t]*Package \[|\z)");
-        if (!block.Success) throw new IOException("无法识别包详情，应用可能已卸载或系统不支持此输出格式。");
-        var name = Regex.Match(block.Value, @"(?m)^[ \t]*versionName=(?<value>[^\r\n]*)");
-        var version = Regex.Match(block.Value, @"\bversionCode=(?<value>[0-9]+)\b");
-        long? code = version.Success && long.TryParse(version.Groups["value"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : null;
+        var details = InstalledAppDetailsParser.Parse(raw, app, paths);
         await EnsureUserAsync(serial, app.UserId, token).ConfigureAwait(false);
-        return new(name.Success ? name.Groups["value"].Value.Trim() : null, code, paths, raw);
+        return details;
     }
 
     public async Task<string> LaunchAsync(string serial, InstalledApp app, CancellationToken token)
@@ -107,6 +150,16 @@ public sealed class InstalledAppsService
         await EnsureUserAsync(serial, app.UserId, token).ConfigureAwait(false);
         var output = await _runningApps.StopAsync(serial, AsRunning(app), token).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(output)) throw new IOException("无法确认强制停止结果：" + Limit(output));
+        return output;
+    }
+
+    public async Task<string> OpenSettingsAsync(string serial, InstalledApp app, CancellationToken token)
+    {
+        Validate(app);
+        await EnsureUserAsync(serial, app.UserId, token).ConfigureAwait(false);
+        var output = await RunAsync($"shell am start --user {app.UserId} -a android.settings.APPLICATION_DETAILS_SETTINGS -d package:{app.PackageName}", serial, token).ConfigureAwait(false);
+        if (!output.Contains("Starting: Intent", StringComparison.Ordinal) && !output.Contains("brought to the front", StringComparison.OrdinalIgnoreCase))
+            throw new IOException("系统未确认应用设置打开结果：" + Limit(output));
         return output;
     }
 

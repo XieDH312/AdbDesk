@@ -39,7 +39,31 @@ public partial class ToolboxPage
         }
         if (_logWindow?.IsCapturing == true || !TargetReady || _paths is null || Serial is not { } serial) return;
         var device = _devices.First(d => d.Serial == serial);
-        var window = new LogCaptureWindow(_paths, serial, device.DeviceName.Length > 0 ? device.DeviceName : device.Model, app)
+        CreateLogWindow(_paths, serial, device.DeviceName.Length > 0 ? device.DeviceName : device.Model, app).Show();
+    }
+    private string OpenAppLogs(string serial, InstalledApp app)
+    {
+        if (_closed || RefreshSuspended) return "工具箱正在关闭或重新配置，请稍后再打开应用日志。";
+        if (_logWindow is { IsClosed: false } existing)
+        {
+            if (existing.Serial != serial)
+                return $"日志窗口固定在设备 {existing.Serial}；请先关闭该窗口，再为设备 {serial} 打开应用日志。";
+            var message = existing.PrefillAppScope(app.PackageName, app.UserId);
+            existing.Activate();
+            return message;
+        }
+        if (_logWindow?.IsCapturing == true) return "已有日志采集尚未完全结束，请等待日志窗口关闭后重试。";
+        if (_paths is null) return "ADB 工具尚未就绪，请检查工具配置。";
+        var device = _devices.FirstOrDefault(d => d.Serial == serial && d.IsReady);
+        if (device is null) return $"设备 {serial} 已离线或尚未就绪，请重新连接后再打开应用日志。";
+        var window = CreateLogWindow(_paths, serial, device.DeviceName.Length > 0 ? device.DeviceName : device.Model);
+        var result = window.PrefillAppScope(app.PackageName, app.UserId);
+        window.Show();
+        return result;
+    }
+    private LogCaptureWindow CreateLogWindow(ToolPaths paths, string serial, string deviceName, RunningApp? app = null)
+    {
+        var window = new LogCaptureWindow(paths, serial, deviceName, app)
         { Owner = Window.GetWindow(this), CanCapture = CanStartCapture };
         _logWindow = window;
         window.CaptureStateChanged += (_, _) =>
@@ -48,7 +72,7 @@ public partial class ToolboxPage
             UpdateControls();
         };
         window.Closed += (_, _) => { if (!window.IsCapturing && ReferenceEquals(_logWindow, window)) _logWindow = null; UpdateControls(); };
-        window.Show();
+        return window;
     }
     private void NetworkCapture_Click(object sender, RoutedEventArgs e)
     {

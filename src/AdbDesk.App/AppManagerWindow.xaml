@@ -18,7 +18,7 @@
             </StackPanel>
         </Grid>
         <Border Grid.Row="1" Background="#EAF2FF" CornerRadius="7" Padding="12,9" Margin="0,14,0,14">
-            <TextBlock Text="仅管理手机当前 Android 用户的已安装应用；应用以真实包名显示。选择一项读取版本和 APK 路径。" Foreground="#365B91" TextWrapping="Wrap"/>
+            <TextBlock Text="按名称或包名搜索，选择应用查看详情。名称读取不到时仍保留包名；手机无需安装辅助应用。" Foreground="#365B91" TextWrapping="Wrap"/>
         </Border>
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions><ColumnDefinition Width="1.4*" MinWidth="430"/><ColumnDefinition Width="14"/><ColumnDefinition Width="1*" MinWidth="300"/></Grid.ColumnDefinitions>
@@ -26,23 +26,44 @@
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="132"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <ComboBox x:Name="CategoryCombo" SelectedIndex="0" SelectionChanged="Filter_Changed" AutomationProperties.Name="应用类型">
                             <ComboBoxItem Content="全部应用"/><ComboBoxItem Content="第三方应用"/><ComboBoxItem Content="系统应用"/>
                         </ComboBox>
-                        <TextBox x:Name="SearchInput" Grid.Column="1" Margin="8,0,0,0" Padding="8,6" TextChanged="Search_Changed" ToolTip="搜索包名" AutomationProperties.Name="搜索包名"/>
+                        <ComboBox x:Name="StateCombo" Grid.Column="1" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="Filter_Changed" AutomationProperties.Name="启用状态">
+                            <ComboBoxItem Content="全部状态"/><ComboBoxItem Content="已启用"/><ComboBoxItem Content="已停用"/>
+                        </ComboBox>
+                        <DockPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                            <TextBlock Text="搜索" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox x:Name="SearchInput" Padding="8,6" TextChanged="Search_Changed" ToolTip="输入应用名称或包名的一部分，不区分大小写；名称读取后自动更新搜索结果" AutomationProperties.Name="搜索应用名称或包名"/>
+                        </DockPanel>
                     </Grid>
                     <DataGrid x:Name="AppList" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single" SelectionUnit="FullRow"
                               CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                               RowHeight="36" SelectionChanged="App_Changed" EnableRowVirtualization="True" AutomationProperties.Name="已安装应用列表">
                         <DataGrid.Columns>
+                            <DataGridTextColumn Header="名称" Binding="{Binding NameText}" Width="140" MinWidth="90">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="NoWrap"/>
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="ToolTip" Value="{Binding NameText}"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                             <DataGridTextColumn Header="包名" Binding="{Binding PackageName}" Width="*" MinWidth="180"/>
                             <DataGridTextColumn Header="类型" Binding="{Binding Kind}" Width="60"/>
                             <DataGridTextColumn Header="状态" Binding="{Binding EnabledState}" Width="70"/>
-                            <DataGridTextColumn Header="版本号" Binding="{Binding VersionCode}" Width="100"/>
+                            <DataGridTextColumn Header="versionCode" Binding="{Binding VersionCode}" Width="100"/>
                         </DataGrid.Columns>
                     </DataGrid>
-                    <TextBlock x:Name="CountText" Grid.Row="2" Text="尚未读取应用" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                    <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                        <TextBlock x:Name="CountText" Text="尚未读取应用" FontSize="12" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="NameStatusText" Text="列表加载后补充应用名称。" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                    </StackPanel>
                 </Grid>
             </Border>
             <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="14">
@@ -54,13 +75,39 @@
                         <Button Content="启动" Click="Launch_Click" Margin="0,0,6,6"/>
                         <Button Content="强制停止" Click="Stop_Click" Margin="0,0,6,6"/>
                         <Button Content="导出 APK" Click="Export_Click" Margin="0,0,6,6"/>
+                        <Button Content="手机应用设置" Click="Settings_Click" Margin="0,0,6,6"/>
+                        <Button x:Name="LogButton" Content="抓取此应用日志" Click="Logs_Click" Margin="0,0,6,6"/>
                         <Button Content="复制包名" Click="Copy_Click" Margin="0,0,6,6"/>
-                        <Button Content="读取详情" Click="Details_Click" Margin="0,0,6,6"/>
+                        <Button Content="复制信息" Click="CopyInfo_Click" Margin="0,0,6,6"/>
+                        <Button Content="刷新详情" Click="Details_Click" Margin="0,0,6,6"/>
                         <Button Content="清除数据…" Click="Clear_Click" Foreground="#B42318" Margin="0,0,6,6"/>
                         <Button Content="为此用户卸载…" Click="Uninstall_Click" Foreground="#B42318" Margin="0,0,6,6"/>
                     </WrapPanel>
-                    <TextBox x:Name="DetailOutput" Grid.Row="3" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                             FontFamily="Consolas, Microsoft YaHei UI" FontSize="12" Padding="10" AutomationProperties.Name="应用详细输出"/>
+                    <TabControl x:Name="DetailsTabs" Grid.Row="3">
+                        <TabItem Header="基本信息">
+                            <TextBox x:Name="DetailOutput" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     FontFamily="Consolas, Microsoft YaHei UI" FontSize="12" Padding="10" AutomationProperties.Name="应用基本信息"/>
+                        </TabItem>
+                        <TabItem Header="权限">
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                                <TextBlock x:Name="PermissionHint" Margin="8" FontSize="12" Foreground="{StaticResource MutedBrush}" Text="选择应用读取权限。"/>
+                                <DataGrid x:Name="PermissionsList" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
+                                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" EnableRowVirtualization="True" AutomationProperties.Name="应用权限及授权状态">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="权限" Binding="{Binding Name}" Width="*" MinWidth="160"/>
+                                        <DataGridTextColumn Header="已申请" Binding="{Binding Requested}" Width="60"/>
+                                        <DataGridTextColumn Header="安装权限" Binding="{Binding InstallState}" Width="80"/>
+                                        <DataGridTextColumn Header="运行时权限" Binding="{Binding RuntimeState}" Width="90"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </TabItem>
+                        <TabItem Header="原始输出">
+                            <TextBox x:Name="RawOutput" IsReadOnly="True" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                     FontFamily="Consolas, Microsoft YaHei UI" FontSize="12" Padding="10" AutomationProperties.Name="原始 ADB 包详情"/>
+                        </TabItem>
+                    </TabControl>
                 </Grid>
             </Border>
         </Grid>

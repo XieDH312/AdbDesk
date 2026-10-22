@@ -46,6 +46,18 @@ public partial class LogCaptureWindow : Window
         UpdateControls();
     }
 
+    public string PrefillAppScope(string packageName, int userId)
+    {
+        if (_closed || _closeRequested) return "日志窗口正在关闭，请等待关闭完成后重试。";
+        if (IsCapturing) return "日志窗口正在采集，当前采集范围与筛选保持不变；请手动停止后再打开所选应用日志。";
+        if (!_deviceReady) return $"设备 {_serial} 已离线，请重新连接后再打开应用日志。";
+        PackageInput.Text = packageName;
+        UserInput.Text = userId.ToString();
+        ScopeInput.SelectedIndex = 1;
+        StatusText.Text = $"已选择设备 {_serial} 的 {packageName}（Android 用户 {userId}）；点击“开始采集”后开始抓取。";
+        return StatusText.Text;
+    }
+
     public void SetDeviceReady(bool ready)
     {
         if (_closed || _deviceReady == ready) return;

@@ -25,6 +25,7 @@ public partial class ToolboxPage
             Owner = Window.GetWindow(this),
             CanOperate = () => !_closed && !RefreshSuspended && _operation is null && _layoutWindow?.IsCapturing != true && !CapturesRunning
         };
+        manager.OpenAppLogs = app => OpenAppLogs(manager.Serial, app);
         _appManagerWindow = manager;
         manager.OperationStateChanged += (_, _) =>
         {
