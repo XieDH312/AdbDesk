@@ -10,7 +10,7 @@ beta.1 和更早版本需要手动下载 beta.2 完整 ZIP 到一个独立、可
 
 ## 发布新版
 
-从 beta.4 开始使用 Android 风格的两个版本字段：csproj 的 `Version` 作为 versionName 展示，`VersionCode` 为正整数，每次发布必须递增（beta.11 为 10011）。新版按远端 code > 本地 code 判断更新。为兼容已发布的 beta.2/beta.3，版本名称及标签仍使用递增 SemVer，原 schema1 清单与签名公钥保持不变。
+从 beta.4 开始使用 Android 风格的两个版本字段：csproj 的 `Version` 作为 versionName 展示，`VersionCode` 为正整数，每次发布必须递增（beta.12 为 10012）。新版按远端 code > 本地 code 判断更新。为兼容已发布的 beta.2/beta.3，版本名称及标签仍使用递增 SemVer，原 schema1 清单与签名公钥保持不变。
 
 新增 `AdbDesk.version.json` 同时存在于程序目录、ZIP 和 Release 附件中，包含 versionCode/versionName。它的原始文件摘要受签名清单保护，不能只改附件数字冒充新版。新版不通过旧版只有名称的清单进行降级；旧客户端先按 SemVer 升级到 beta.4，后续改按数字比较。
 
@@ -18,12 +18,12 @@ beta.1 和更早版本需要手动下载 beta.2 完整 ZIP 到一个独立、可
 2. 用 PowerShell 7 执行：
 
    ```powershell
-   ./scripts/package-release.ps1 -PublishDirectory ./dist/新版目录 -Version 1.0.0-beta.11
+   ./scripts/package-release.ps1 -PublishDirectory ./dist/新版目录 -Version 1.0.0-beta.12
    ```
 
    ZIP 内直接包含程序文件，无外层目录。脚本生成 ZIP、SHA256SUMS.txt、update-manifest.json、update-manifest.sig、AdbDesk.version.json 五个附件。清单含所有文件的 SHA256，使用 RSA-PSS SHA256 签名；数字版本元数据必须一起上传。
 3. 将已验证的源码推送到 GitHub main，并在对应源码树的提交上创建同名 v 版本标签，再推送标签。源码也同步到 Gitee；本地工具、构建产物、用户数据和私钥不进入源码提交。
-4. 执行 `./scripts/publish-github-release.ps1 -Version 1.0.0-beta.11 -NotesFile ./docs/releases/v1.0.0-beta.11.md`。先上传草稿，核对远端所有附件的大小和 SHA256，成功后才公开。已公开版本不可覆盖，应递增版本发布。
+4. 执行 `./scripts/publish-github-release.ps1 -Version 1.0.0-beta.12 -NotesFile ./docs/releases/v1.0.0-beta.12.md`。先上传草稿，核对远端所有附件的大小和 SHA256，成功后才公开。已公开版本不可覆盖，应递增版本发布。
 
 发布签名私钥保存在发布电脑 `%LOCALAPPDATA%/AdbDesk/ReleaseKeys/update-private-key.dpapi`，仅当前 Windows 用户可解密。它不进入源码、安装目录或发行附件。请妥善备份发布密钥和 Windows 用户环境；丢失后不能通过重新生成不同密钥继续更新已有客户端。迁移发布机需要单独安排安全的密钥迁移。
 

@@ -12,6 +12,12 @@ if (Environment.GetEnvironmentVariable("ADBDESK_TEST_FAKE_TOOL") == "1")
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("wireless discovery parses TLS legacy and pairing endpoints", WirelessDiscoveryTests.ParsingAsync),
+    ("wireless discovery requires exact network transport matches", WirelessDiscoveryTests.MatchingAsync),
+    ("wireless discovery names survive port changes without IP-only identity", WirelessDiscoveryTests.NamesAsync),
+    ("wireless discovery name cache is bounded and recoverable", WirelessDiscoveryTests.CacheBoundsAsync),
+    ("wireless discovery reports discovery and partial name errors", WirelessDiscoveryTests.FailureAsync),
+    ("wireless discovery cancellation and timeout stop bounded client reads", WirelessDiscoveryTests.CancellationAsync),
     ("mirror toolbar docks outside the phone frame or uses hidden edge reveal", MirrorToolbarPlacementTests.PlacementAsync),
     ("mirror toolbar auto-hide preserves hover grace and owned help without first-frame overlays", MirrorToolbarPlacementTests.VisibilityAsync),
     ("mirror screen buttons target one owned window and release modifiers on failed submission", MirrorScreenControlTests.CommandsAsync),
@@ -105,6 +111,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("pair success remains distinct from verified connection", PairingPartialAsync),
     ("pair failure cancellation and progress never expose credentials", PairingFailureAndCancellationAsync),
     ("process runner forwards output and bounds a hung child", ProcessRunnerAsync),
+    ("ADB client cancellation preserves its shared server child", ProcessRunnerClientOnlyAsync),
     ("install queue serializes each serial and permits only two global installs", InstallConcurrencyAsync),
     ("install queue cancels queued and running work", InstallCancellationAsync),
     ("install queue requires Success and exit zero", InstallResultAsync),
@@ -903,6 +910,43 @@ static async Task ProcessRunnerAsync()
     True(stopwatch.Elapsed < TimeSpan.FromSeconds(4), "timeout kills owned child promptly");
 }
 
+static async Task ProcessRunnerClientOnlyAsync()
+{
+    using var fixture = new ToolFixture();
+    using var cancellation = new CancellationTokenSource();
+    var childPath = Path.Combine(fixture.DirectoryPath, "shared-child.pid");
+    var running = ProcessRunner.RunAsync(fixture.Paths.Adb, ["hang-with-shared-child"],
+        TimeSpan.FromSeconds(15), cancellationToken: cancellation.Token, killEntireProcessTree: false);
+    Process? child = null;
+    try
+    {
+        await TestWait.UntilAsync(() => File.Exists(childPath), TimeSpan.FromSeconds(5));
+        child = Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(childPath)));
+        cancellation.Cancel();
+        await ThrowsAsync<OperationCanceledException>(() => running.WaitAsync(TimeSpan.FromSeconds(4)));
+        False(child.HasExited, "canceling a CLI client must preserve the shared daemon it started");
+    }
+    finally
+    {
+        cancellation.Cancel();
+        try { await running.WaitAsync(TimeSpan.FromSeconds(4)); } catch { }
+        if (child is null && File.Exists(childPath))
+        {
+            try { child = Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(childPath))); }
+            catch (ArgumentException) { }
+        }
+        if (child is not null)
+        {
+            try
+            {
+                if (!child.HasExited) child.Kill(entireProcessTree: true);
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(4));
+            }
+            finally { child.Dispose(); }
+        }
+    }
+}
+
 static async Task InstallConcurrencyAsync()
 {
     using var fixture = new ToolFixture();
@@ -1362,6 +1406,23 @@ static class FakeTool
         {
             Console.WriteLine("hello stdout");
             Console.Error.WriteLine("hello stderr");
+            return;
+        }
+        if (arguments.SequenceEqual(["hang-with-shared-child"]))
+        {
+            var start = new ProcessStartInfo(Environment.ProcessPath!)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false
+            };
+            start.ArgumentList.Add("hang");
+            using var child = Process.Start(start) ?? throw new InvalidOperationException("Fake daemon failed to start");
+            var pidPath = Path.Combine(directory, "shared-child.pid");
+            await File.WriteAllTextAsync(pidPath + ".tmp", child.Id.ToString());
+            File.Move(pidPath + ".tmp", pidPath);
+            await Task.Delay(TimeSpan.FromMinutes(2));
             return;
         }
         if (arguments.SequenceEqual(["hang"]))

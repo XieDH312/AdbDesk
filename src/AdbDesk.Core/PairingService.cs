@@ -236,7 +236,8 @@ public sealed class PairingService
                 arguments,
                 timeout,
                 cancellationToken: cancellationToken,
-                standardInput: standardInput).ConfigureAwait(false);
+                standardInput: standardInput,
+                killEntireProcessTree: false).ConfigureAwait(false);
             return new CommandResult(result.ExitCode == 0, result.StandardOutput.Trim(), result.StandardError.Trim());
         }
         catch (OperationCanceledException) { throw; }

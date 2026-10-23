@@ -215,7 +215,7 @@ public sealed class AdbService
             _paths.Adb,
             ["devices", "-l"],
             CommandTimeout,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken, killEntireProcessTree: false).ConfigureAwait(false);
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"ADB 设备查询失败（退出代码 {result.ExitCode}）：{FirstUsefulText(result.StandardError, result.StandardOutput)}");
         var devices = ParseDevices(result.StandardOutput);
@@ -347,7 +347,7 @@ public sealed class AdbService
                 _paths.Adb,
                 arguments,
                 timeout,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+                cancellationToken: cancellationToken, killEntireProcessTree: false).ConfigureAwait(false);
             return new CommandResult(result.ExitCode == 0, result.StandardOutput.Trim(), result.StandardError.Trim());
         }
         catch (OperationCanceledException) { throw; }

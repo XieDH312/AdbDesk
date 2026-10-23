@@ -302,7 +302,7 @@ public partial class MainWindow : Window
         QuickConnectResult.Visibility = Visibility.Visible;
     }
 
-    private void OpenPairingWindow(PairingTab initialTab)
+    private void OpenPairingWindow(PairingTab initialTab, string? pairingEndpoint = null)
     {
         if (_isClosing)
         {
@@ -319,6 +319,7 @@ public partial class MainWindow : Window
         {
             if (_pairingWindow.WindowState == WindowState.Minimized) _pairingWindow.WindowState = WindowState.Normal;
             _pairingWindow.Activate();
+            if (pairingEndpoint is not null) _pairingWindow.TryPrefillPairingEndpoint(pairingEndpoint);
             return;
         }
 
@@ -326,8 +327,11 @@ public partial class MainWindow : Window
             () => Devices.Where(row => row.IsReady && row.Device.Transport == DeviceTransport.Usb)
                 .SelectMany(row => row.Device.Network.WifiAddresses.Select(address => address.Address)).Distinct().ToArray())
         {
-            Owner = this
+            Owner = this,
+            ConnectedAsync = OnWirelessConnectionConfirmedAsync,
+            PairingCompletedAsync = OnWirelessPairingCompletedAsync
         };
+        if (pairingEndpoint is not null) window.TryPrefillPairingEndpoint(pairingEndpoint);
         _pairingWindow = window;
         window.Closed += async (_, _) =>
         {
@@ -335,7 +339,11 @@ public partial class MainWindow : Window
             {
                 _pairingWindow = null;
             }
-            if (!_isClosing) await RefreshDevicesAsync();
+            if (!_isClosing)
+            {
+                await RefreshDevicesAsync();
+                if (_wirelessDiscoveryWindow is { } discovery) await discovery.RefreshAfterPairingAsync();
+            }
         };
         window.Show();
     }
@@ -407,52 +415,13 @@ public partial class MainWindow : Window
 
     private async void DisconnectButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_isClosing || _adbService is not { } service ||
-            (sender as FrameworkElement)?.DataContext is not DeviceRow row || !row.CanDisconnectAction) return;
-        if (InstallTasks.Any(task => task.Serial == row.Serial && ActiveInstallStates.Contains(task.Status)))
-        {
-            SetStatus("这台设备有安装任务，请等待完成或取消安装后再断开连接", StatusKind.Warning);
-            return;
-        }
-
-        row.IsDisconnecting = true;
-        row.IsSelected = false;
-        row.SetWirelessStatus(string.Empty);
-        _deviceRevision++;
+        if ((sender as FrameworkElement)?.DataContext is not DeviceRow row) return;
         try
         {
-            var result = await service.DisconnectWirelessAsync(row.Device, _lifetime.Token);
-            if (_isClosing) return;
-            row.SetWirelessStatus(result.Message);
-            AppendMirrorLog(row.Serial, result.Message);
-            if (result.Disconnected)
-            {
-                _mirrorService?.Stop(row.Serial);
-                row.IsMirroring = false;
-                row.Update(row.Device with { State = "offline" });
-                row.PropertyChanged -= DeviceRow_PropertyChanged;
-                Devices.Remove(row);
-                UpdateDeviceSummary();
-            }
-            SetStatus(result.Message, result.Disconnected ? StatusKind.Ready : StatusKind.Warning);
+            var result = await DisconnectDeviceAsync(row.Device, _lifetime.Token);
+            if (!_isClosing) SetStatus(result.Message, result.Disconnected ? StatusKind.Ready : StatusKind.Warning);
         }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
-        catch (Exception exception)
-        {
-            if (!_isClosing)
-            {
-                var message = $"无法确认断开结果：{exception.Message}";
-                row.SetWirelessStatus(message);
-                AppendMirrorLog(row.Serial, message);
-                SetStatus(message, StatusKind.Error);
-            }
-        }
-        finally
-        {
-            row.IsDisconnecting = false;
-            _deviceRevision++;
-        }
-        if (!_isClosing) await RefreshDevicesAsync();
+        catch (OperationCanceledException) when (_isClosing) { }
     }
 
     private async void WirelessButton_Click(object sender, RoutedEventArgs e)
@@ -954,6 +923,7 @@ public partial class MainWindow : Window
 
         _closePending = true;
         _isClosing = true;
+        CloseWirelessDiscovery();
         ApplicationSurface.IsEnabled = false;
         _deviceTimer.Stop();
         AppToolbox.RefreshSuspended = true;
@@ -977,6 +947,7 @@ public partial class MainWindow : Window
         AdbConsole.Shutdown();
         AppToolbox.Shutdown();
         _deviceTimer.Stop();
+        CloseWirelessDiscovery();
         _pairingWindow?.Close();
         _pairingWindow = null;
         _lifetime.Cancel();
@@ -991,6 +962,7 @@ public partial class MainWindow : Window
 
     private void DisposeServices()
     {
+        CloseWirelessDiscovery();
         DisposeMirrorDisplay();
         foreach (var serial in _mirrorStarting.Keys.ToArray()) CancelMirrorStart(serial);
         AdbConsole.Configure(null);

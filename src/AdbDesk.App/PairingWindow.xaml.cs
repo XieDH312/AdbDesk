@@ -42,6 +42,29 @@ public partial class PairingWindow : Window
         RefreshWifiChoices();
     }
 
+    public Func<string, Task>? ConnectedAsync { get; set; }
+    public Func<Task>? PairingCompletedAsync { get; set; }
+
+    public bool TryPrefillPairingEndpoint(string endpoint)
+    {
+        if (_closed) return false;
+        if (_operation is not null)
+        {
+            ShowStatus("当前配对操作尚未结束，请先停止操作，再从发现设备中选择配对服务。", true);
+            return false;
+        }
+        var normalized = NetworkConnectionDiagnostics.ApplyWifiHost(endpoint, null);
+        SelectTab(PairingTab.Code);
+        UseWifiHost.IsChecked = false;
+        PairingAddress.Text = normalized;
+        OptionalConnectionAddress.Clear();
+        ManualConnectionAddress.Clear();
+        PairingCode.Clear();
+        ShowStatus($"已填入发现的配对地址 {normalized}。请输入手机配对弹窗中的六位配对码。", false);
+        PairingCode.Focus();
+        return true;
+    }
+
     public void SelectTab(PairingTab tab) => PairingTabs.SelectedIndex = tab == PairingTab.Qr ? 0 : 1;
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -229,7 +252,15 @@ public partial class PairingWindow : Window
             var summary = result.Connected ? "设备已连接" : result.Paired ? "已配对，但尚未连接" : "尚未连接成功";
             ShowStatus($"{summary}\n{result.Message}", !result.Connected);
             if (!string.IsNullOrWhiteSpace(result.Endpoint)) ManualConnectionAddress.Text = result.Endpoint;
-            if (result.Connected) await _refreshDevices();
+            if (result.Connected)
+            {
+                if (ConnectedAsync is { } connected) await connected(result.Endpoint);
+                else await _refreshDevices();
+            }
+            else if (result.Paired && PairingCompletedAsync is { } paired)
+            {
+                await paired();
+            }
         }
         catch (OperationCanceledException)
         {

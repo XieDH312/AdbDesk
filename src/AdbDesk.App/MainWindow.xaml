@@ -46,8 +46,8 @@
         <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
             <Grid Margin="28,20">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Image Source="Assets/AdbDesk.png" Width="42" Height="42" RenderOptions.BitmapScalingMode="HighQuality" />
@@ -56,8 +56,9 @@
                         <TextBlock Text="连接、投屏与安装，一处完成" Style="{StaticResource CaptionStyle}" Margin="0,2,0,0" />
                     </StackPanel>
                 </StackPanel>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal">
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
+                    <WrapPanel HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,3">
                         <TextBlock Text="IP" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource MutedBrush}" />
                         <TextBox x:Name="QuickConnectIp" Width="140" Height="36" Padding="8,0"
                                  VerticalContentAlignment="Center" MaxLength="15"
@@ -73,9 +74,12 @@
                                  AutomationProperties.Name="ADB 连接端口"
                                  ToolTip="USB 开启无线默认 5555；系统无线调试请填主页显示的连接端口" />
                         <Button x:Name="QuickConnectButton" Content="连接" Click="QuickConnectButton_Click" Margin="8,0,12,0" />
-                        <Button Content="无线连接" Click="WirelessConnectionButton_Click" Margin="0,0,8,0" />
-                        <Button Content="使用帮助" Click="HelpButton_Click" />
-                    </StackPanel>
+                        </StackPanel>
+                        <Button x:Name="DiscoverDevicesButton" Content="发现设备" Click="DiscoverDevicesButton_Click" Margin="0,3,8,3"
+                                ToolTip="发现局域网广播的无线 ADB 服务，获取当前连接端口" />
+                        <Button Content="无线连接" Click="WirelessConnectionButton_Click" Margin="0,3,8,3" />
+                        <Button Content="使用帮助" Click="HelpButton_Click" Margin="0,3,0,3" />
+                    </WrapPanel>
                     <TextBlock x:Name="QuickConnectResult" Visibility="Collapsed" TextWrapping="Wrap"
                                MaxWidth="490" HorizontalAlignment="Left" FontSize="12" Margin="0,6,0,0" />
                     <Button x:Name="RetryButton" Content="重新检测工具" Click="RetryButton_Click"

@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <AssemblyName>AdbDesk</AssemblyName>
-    <Version>1.0.0-beta.11</Version>
-    <VersionCode>10011</VersionCode>
+    <Version>1.0.0-beta.12</Version>
+    <VersionCode>10012</VersionCode>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -26,6 +26,7 @@
     <Content Include="..\..\docs\updates.md" Link="docs\updates.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\mirror-display.md" Link="docs\mirror-display.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\app-management.md" Link="docs\app-management.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\wireless-discovery.md" Link="docs\wireless-discovery.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\network-capture.md" Link="docs\network-capture.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\licenses\mitmproxy-LICENSE.txt" Link="licenses\mitmproxy-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\tools\mitmproxy\mitmdump.exe;..\..\tools\mitmproxy\*.txt" Condition="Exists('..\..\tools\mitmproxy\mitmdump.exe')">

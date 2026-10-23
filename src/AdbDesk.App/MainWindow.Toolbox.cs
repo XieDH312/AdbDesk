@@ -10,9 +10,10 @@ public partial class MainWindow
         if (_isClosing || _adbRestarting || _toolPaths is not { } paths) return "ADB 工具尚未就绪。";
         bool Busy() => AdbConsole.IsRunning || AppToolbox.IsRunning || _quickConnecting ||
             Devices.Any(d => d.IsConnectionBusy || d.IsCapturing) ||
-            InstallTasks.Any(t => ActiveInstallStates.Contains(t.Status)) || _pairingWindow?.IsVisible == true;
+            InstallTasks.Any(t => ActiveInstallStates.Contains(t.Status)) || _pairingWindow?.IsVisible == true ||
+            _wirelessDiscoveryWindow?.IsVisible == true;
         if (Busy())
-            return "请先结束安装、截图、无线配对或控制台任务，再重启 ADB 服务。";
+            return "请先结束安装、截图、无线配对或控制台任务，并关闭发现设备窗口，再重启 ADB 服务。";
 
         // Modal confirmation pumps the dispatcher: device discovery must not
         // auto-start a toolbox query while this restart is being confirmed/drained.

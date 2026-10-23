@@ -1,0 +1,118 @@
+<Window x:Class="AdbDesk.App.WirelessDiscoveryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="无线 ADB 服务" Width="820" Height="560" MinWidth="600" MinHeight="420"
+        Icon="Assets/AdbDesk.ico" WindowStartupLocation="CenterOwner"
+        Loaded="Window_Loaded" Closed="Window_Closed">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </Window.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,12">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="12,0,0,0">
+                    <Button x:Name="RefreshButton" Content="刷新" Click="Refresh_Click" MinWidth="70" />
+                    <Button x:Name="CancelButton" Content="取消" Click="Cancel_Click" IsEnabled="False" MinWidth="70" Margin="8,0,0,0" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="无线 ADB 服务" FontSize="21" FontWeight="Bold" />
+                    <Border Background="#E8EFFD" CornerRadius="10" Padding="9,3" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="ServiceCountText" Text="0 个" FontSize="12" Foreground="{StaticResource AccentBrush}" />
+                    </Border>
+                </StackPanel>
+            </DockPanel>
+            <TextBlock Text="发现当前局域网中的连接与配对服务。地址可能变化，执行操作前会重新确认。"
+                       Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,8,0,0" />
+        </StackPanel>
+        <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="1"
+                CornerRadius="8" Padding="10,7" Margin="0,0,0,10">
+            <TextBox x:Name="StatusText" Text="正在准备发现服务…" IsReadOnly="True" IsReadOnlyCaretVisible="False"
+                     BorderThickness="0" Background="Transparent" TextWrapping="Wrap" MaxHeight="66"
+                     VerticalScrollBarVisibility="Auto" Foreground="{StaticResource AccentBrush}" />
+        </Border>
+        <Border x:Name="DiscoveryWarning" Grid.Row="2" Background="#FFFBEB" BorderBrush="#FDE68A" BorderThickness="1"
+                CornerRadius="8" Padding="10,7" Margin="0,0,0,10" Visibility="Collapsed">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="72">
+                <TextBlock x:Name="DiscoveryWarningText" Foreground="#92400E" FontSize="12" />
+            </ScrollViewer>
+        </Border>
+        <Grid Grid.Row="3">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+                <ItemsControl x:Name="ServicesList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardStyle}" Padding="15,12" Margin="0,0,0,10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <DockPanel LastChildFill="True">
+                                        <Border DockPanel.Dock="Right" Background="{Binding StateBackground}" CornerRadius="9"
+                                                Padding="9,3" Margin="10,0,0,0" VerticalAlignment="Top">
+                                            <TextBlock Text="{Binding StateText}" Foreground="{Binding StateForeground}" FontSize="12" FontWeight="SemiBold" />
+                                        </Border>
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="16" FontWeight="SemiBold" TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}" />
+                                    </DockPanel>
+                                    <WrapPanel Grid.Row="1" Margin="0,7,0,0">
+                                        <TextBlock Text="{Binding Entry.Endpoint}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <Border Background="#F3E8FF" CornerRadius="5" Padding="6,2" Margin="0,0,8,0"
+                                                Visibility="{Binding Entry.IsPairing, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="配对服务" Foreground="#7E22CE" FontSize="11" />
+                                        </Border>
+                                        <Border Background="#F1F5F9" CornerRadius="5" Padding="6,2"
+                                                Visibility="{Binding Entry.IsHistoricalName, Converter={StaticResource BoolToVisibility}}"
+                                                ToolTip="此名称来自历史记录，仅用于帮助识别设备。">
+                                            <TextBlock Text="历史名称" Foreground="{StaticResource MutedBrush}" FontSize="11" />
+                                        </Border>
+                                    </WrapPanel>
+                                    <TextBlock Grid.Row="2" Text="{Binding ServiceDescription}" Foreground="{StaticResource MutedBrush}"
+                                               FontSize="11" Margin="0,6,0,0" />
+                                    <WrapPanel Grid.Row="3" Margin="0,10,0,0">
+                                        <Button Content="复制地址" Click="CopyEndpoint_Click" Height="30" Padding="12,0" Margin="0,0,8,0" />
+                                        <Button Content="连接" Click="Connect_Click" Height="30" Padding="14,0" Margin="0,0,8,0"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Visibility="{Binding ShowConnect, Converter={StaticResource BoolToVisibility}}" />
+                                        <Button Content="断开连接" Click="Disconnect_Click" Height="30" Padding="12,0" Margin="0,0,8,0"
+                                                Visibility="{Binding ShowDisconnect, Converter={StaticResource BoolToVisibility}}" />
+                                        <Button Content="配对" Click="Pair_Click" Height="30" Padding="14,0" Margin="0,0,8,0"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Visibility="{Binding Entry.IsPairing, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Text="配对端口仅用于配对" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"
+                                                   Visibility="{Binding Entry.IsPairing, Converter={StaticResource BoolToVisibility}}" />
+                                    </WrapPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <ScrollViewer x:Name="EmptyState" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" VerticalContentAlignment="Center">
+            <Border Style="{StaticResource CardStyle}" Padding="24">
+                <StackPanel>
+                    <TextBlock Text="暂未发现无线 ADB 服务" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock Text="在 Android 11 及以上设备中开启“开发者选项 → 无线调试”，让手机和电脑连接同一局域网，然后刷新。"
+                               Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0" TextAlignment="Center" />
+                    <TextBlock Text="需要配对时，请保持手机的“使用配对码配对设备”弹窗打开。也可使用下方的手动配对 / 连接入口。"
+                               Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,8,0,0" TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+            </ScrollViewer>
+        </Grid>
+        <DockPanel Grid.Row="4" LastChildFill="True" Margin="0,8,0,0">
+            <Button x:Name="ManualPairingButton" DockPanel.Dock="Right" Content="手动配对 / 连接" Click="ManualPairing_Click" Margin="14,0,0,0" />
+            <TextBlock Text="VPN、防火墙或访客 Wi-Fi 可能阻挡 mDNS 组播，导致无法发现。可手动填写手机的 Wi-Fi IP 和对应端口。"
+                       Foreground="{StaticResource MutedBrush}" FontSize="11" VerticalAlignment="Center" />
+        </DockPanel>
+    </Grid>
+</Window>

@@ -16,7 +16,8 @@ internal static class ProcessRunner
         CancellationToken cancellationToken = default,
         string? workingDirectory = null,
         IReadOnlyDictionary<string, string?>? environment = null,
-        string? standardInput = null)
+        string? standardInput = null,
+        bool killEntireProcessTree = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executable);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -50,32 +51,40 @@ internal static class ProcessRunner
 
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
-        var stdoutTask = ReadLinesAsync(process.StandardOutput, stdout, standardOutput);
-        var stderrTask = ReadLinesAsync(process.StandardError, stderr, standardError);
         using var timeoutSource = new CancellationTokenSource(timeout);
         using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        var stdoutTask = ReadLinesAsync(process.StandardOutput, stdout, standardOutput, linkedSource.Token);
+        var stderrTask = ReadLinesAsync(process.StandardError, stderr, standardError, linkedSource.Token);
         var stdinTask = standardInput is null
             ? Task.CompletedTask
             : WriteInputAsync(process.StandardInput, standardInput, linkedSource.Token);
+        var pipes = Task.WhenAll(stdoutTask, stderrTask, stdinTask);
 
         try
         {
             await process.WaitForExitAsync(linkedSource.Token).ConfigureAwait(false);
-            await Task.WhenAll(stdoutTask, stderrTask, stdinTask).ConfigureAwait(false);
+            await pipes.WaitAsync(linkedSource.Token).ConfigureAwait(false);
+            linkedSource.Token.ThrowIfCancellationRequested();
             return new ProcessResult(process.ExitCode, stdout.ToString(), stderr.ToString());
         }
         catch (OperationCanceledException)
         {
-            TryKill(process);
-            try { await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); }
-            catch (InvalidOperationException) { }
-            await IgnorePipeErrorsAsync(stdoutTask, stderrTask, stdinTask).ConfigureAwait(false);
+            // ADB clients may start a shared server. Those callers opt out of tree termination.
+            TryKill(process, killEntireProcessTree);
+            await FinishAfterStopAsync(process, pipes).ConfigureAwait(false);
 
             if (cancellationToken.IsCancellationRequested)
             {
                 throw new OperationCanceledException(cancellationToken);
             }
             throw new TimeoutException($"进程在 {timeout.TotalSeconds:0.#} 秒内未完成：{Path.GetFileName(executable)}");
+        }
+        catch
+        {
+            TryKill(process, killEntireProcessTree);
+            linkedSource.Cancel();
+            await FinishAfterStopAsync(process, pipes).ConfigureAwait(false);
+            throw;
         }
     }
 
@@ -89,9 +98,10 @@ internal static class ProcessRunner
         catch (System.ComponentModel.Win32Exception) { }
     }
 
-    private static async Task ReadLinesAsync(StreamReader reader, StringBuilder destination, Action<string>? callback)
+    private static async Task ReadLinesAsync(StreamReader reader, StringBuilder destination, Action<string>? callback,
+        CancellationToken cancellationToken)
     {
-        while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
+        while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
         {
             destination.AppendLine(line);
             if (callback is null) continue;
@@ -113,11 +123,19 @@ internal static class ProcessRunner
         }
     }
 
-    private static async Task IgnorePipeErrorsAsync(params Task[] tasks)
+    private static async Task FinishAfterStopAsync(Process process, Task pipes)
     {
-        try { await Task.WhenAll(tasks).ConfigureAwait(false); }
-        catch (IOException) { }
-        catch (ObjectDisposedException) { }
-        catch (OperationCanceledException) { }
+        try
+        {
+            await Task.WhenAll(process.WaitForExitAsync(), pipes).WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or TimeoutException or IOException or InvalidOperationException)
+        {
+            // A surviving shared server can retain inherited output handles. Close only our readers.
+            process.StandardOutput.Close();
+            process.StandardError.Close();
+        }
+        _ = pipes.ContinueWith(task => _ = task.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 }
